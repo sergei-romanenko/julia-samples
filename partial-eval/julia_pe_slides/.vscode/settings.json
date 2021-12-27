@@ -1,0 +1,6 @@
+{
+  "markdown.marp.breaks": "off",
+  "markdown.marp.themes": [
+    "./custom.css"
+  ]
+}

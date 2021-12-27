@@ -1,0 +1,51 @@
+/* @theme custom */
+@import 'default';
+
+section {
+  background-color: #fff;
+  justify-content: normal;
+}
+
+section.lead {
+  background-color: #fff;
+  justify-content: center;
+}
+
+section.lead h1, section.lead h2, section.lead h3, section.lead h4{
+  text-align: center;
+}
+
+section.lead p {
+  text-align: center;
+}
+
+img[alt=width50] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
+img[alt=c10em] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 10em;
+}
+img[alt=c15em] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 15em;
+}
+img[alt=c20em] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 20em;
+}
+img[alt=c25em] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 25em;
+}
