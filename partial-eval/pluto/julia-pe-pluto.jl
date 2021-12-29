@@ -18,6 +18,9 @@ struct Succ{T<:Peano} <: Peano
 	prev::T
 end
 
+# ╔═╡ bcc1bf85-af16-439a-9815-3a44e42e7e94
+typeof(Peano)
+
 # ╔═╡ d2a389b4-bfa4-4344-adaa-c9fd540876e0
 p0 = Zero()
 
@@ -40,13 +43,16 @@ p3 = Succ(p2)
 Succ(Zero()) == p1
 
 # ╔═╡ 6063a09d-5725-4657-ae15-68eede3ad8ec
-add(x::Zero, y) = y
+add(x::Zero, y::Peano) = y
 
 # ╔═╡ 6e7ab652-dad4-4708-a927-eb38adf0b713
-add(x::Succ, y) = Succ(add(x.prev, y))
+add(x::Succ, y::Peano) = Succ(add(x.prev, y))
 
 # ╔═╡ 0508e086-2abb-4ea4-9dc4-8d7ebae2e46c
 add(p2, p3)
+
+# ╔═╡ 65a7f0f1-e9c5-4da6-8ac1-2cbf2474b41b
+@code_typed add(p1, p2)
 
 # ╔═╡ e979fae3-c4fb-41b5-9403-a074fc0adb7d
 repeat(n::Zero, a) = a
@@ -92,7 +98,13 @@ ackerman(p3, p1)
 (@which ackerman(p3, p1)).specializations
 
 # ╔═╡ d24d8a74-5724-43f8-b05a-35cb4eabeccc
-typeof(Val(100))
+typeof(Val(99))
+
+# ╔═╡ 9584b973-84ba-4421-83c4-0fb340d94635
+supertype(typeof(99))
+
+# ╔═╡ 7b5f12e8-dd34-42c8-8fcd-824ab57e7139
+supertype(typeof(Val(99)))
 
 # ╔═╡ c4553a69-01ec-4b96-8c95-25d3391e0ed6
 typeof(Val((1,2,(3,4))))
@@ -115,6 +127,9 @@ pw(::Val{0}, x) = one(x)
 # ╔═╡ 9d731d6b-5180-4f11-a966-51fa7de0a251
 pw(::Val{n}, x) where {n} = x * pw(Val(n-1), x)
 
+# ╔═╡ 9b5de860-368d-42d9-ba4f-cebc1d3610ad
+pw(n::Integer, x) = pw(Val(n), x)
+
 # ╔═╡ 776a9346-07f5-4f39-8b9a-e4a2e13c8961
 pw(p2, 2.0)
 
@@ -126,6 +141,9 @@ pw(Val(3), "a")
 
 # ╔═╡ ef819a93-64e5-4611-9bb9-80382a726fc9
 @code_typed pw(Val(5), 10)
+
+# ╔═╡ b54a9098-d4e2-4c1b-a3e7-20a116605a8d
+pw(3, "a")
 
 # ╔═╡ f46790cd-c972-488a-8a0d-4ddc68f33f1f
 function pw_d(n, x)
@@ -194,13 +212,16 @@ function one_of(::Val{s}, ::Val{k}, x) where {s, k}
 end
 
 # ╔═╡ 77709bc8-866b-4ac6-a878-b40023e0d80a
-one_of(::Val{s}, x) where {s} = one_of(Val(s), Val(length(s)), x)
+one_of(s::NTuple, x) = one_of(Val(s), Val(length(s)), x)
 
 # ╔═╡ 46183568-4cfd-424c-9732-4f2196ee0156
-one_of(Val((:A, :B, :C)), :B)
+one_of((:A, :B, :C), :B)
 
 # ╔═╡ 06d32139-d917-43f2-abc9-97cbbfc87632
-@code_typed one_of(Val((:A, :B, :C)), :D)
+@code_typed one_of(Val((:A, :B, :C)), Val(3), :D)
+
+# ╔═╡ 3422e457-2b7a-4866-9cdc-fbac7d926cb9
+@code_typed one_of(Val((:A, :B)), Val(2), :D)
 
 # ╔═╡ 14422809-0fec-4479-b75b-edc617687f04
 (@which one_of(Val((:A, :B, :C)), Val(3), :D)).specializations
@@ -249,6 +270,7 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 # ╠═e68578e0-64f1-11ec-0f13-0f15a1e7a60a
 # ╠═4d496de2-2e33-42a3-8f97-1d2956fe4b0b
 # ╠═453ef133-b302-4088-beeb-8c389c978830
+# ╠═bcc1bf85-af16-439a-9815-3a44e42e7e94
 # ╠═d2a389b4-bfa4-4344-adaa-c9fd540876e0
 # ╠═a977f118-619e-43d2-9a9c-bd26b53102ea
 # ╠═590a891e-7e0a-46e0-b71a-a827be16dda7
@@ -259,6 +281,7 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 # ╠═6063a09d-5725-4657-ae15-68eede3ad8ec
 # ╠═6e7ab652-dad4-4708-a927-eb38adf0b713
 # ╠═0508e086-2abb-4ea4-9dc4-8d7ebae2e46c
+# ╠═65a7f0f1-e9c5-4da6-8ac1-2cbf2474b41b
 # ╠═e979fae3-c4fb-41b5-9403-a074fc0adb7d
 # ╠═c200d081-d837-42ec-a374-fc475ed46065
 # ╠═bca31ce7-03d0-4c54-b161-b62eb0c036ee
@@ -275,6 +298,8 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 # ╠═f05474ae-44f7-4045-8061-ccdf9e7646ca
 # ╠═98b38c8d-ab76-4a55-a358-b59dd31bf1a0
 # ╠═d24d8a74-5724-43f8-b05a-35cb4eabeccc
+# ╠═9584b973-84ba-4421-83c4-0fb340d94635
+# ╠═7b5f12e8-dd34-42c8-8fcd-824ab57e7139
 # ╠═c4553a69-01ec-4b96-8c95-25d3391e0ed6
 # ╠═ad26e335-3284-4a6b-bc36-974e7ce05fd5
 # ╠═493f15cb-e066-42e3-8e76-01ad237d2b35
@@ -284,6 +309,8 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 # ╠═9d731d6b-5180-4f11-a966-51fa7de0a251
 # ╠═7f2602cc-5d85-45ab-9827-5e58556d39ec
 # ╠═ef819a93-64e5-4611-9bb9-80382a726fc9
+# ╠═9b5de860-368d-42d9-ba4f-cebc1d3610ad
+# ╠═b54a9098-d4e2-4c1b-a3e7-20a116605a8d
 # ╠═98c40ace-6760-4465-b27c-9506eeb1870f
 # ╠═f46790cd-c972-488a-8a0d-4ddc68f33f1f
 # ╠═f15650d2-40ed-4e9a-a13d-db07e254a23c
@@ -300,6 +327,7 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 # ╠═77709bc8-866b-4ac6-a878-b40023e0d80a
 # ╠═46183568-4cfd-424c-9732-4f2196ee0156
 # ╠═06d32139-d917-43f2-abc9-97cbbfc87632
+# ╠═3422e457-2b7a-4866-9cdc-fbac7d926cb9
 # ╠═14422809-0fec-4479-b75b-edc617687f04
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
