@@ -61,11 +61,12 @@ author: Сергей Романенко
 
 ## Симбиоз в случае Рефала
 
-- Климов Анд.В. , Романенко С.А. РЕФАЛ в мониторной системе “Дубна”
-  БЭСМ-6. Интерфейс РЕФАЛа и ФОРТРАНа. - М.:ИПМ АН СССР, 1975. - 86 с.
+- Климов Анд.В. , Романенко С.А. **РЕФАЛ в мониторной системе “Дубна”
+  БЭСМ-6. Интерфейс РЕФАЛа и ФОРТРАНа.** - М.:ИПМ АН СССР, 1975. - 86 с.
 
-- С.А.Романенко. Система программирования Рефал-2 для ЕС ЭВМ. Интерфейс
-  Рефала и PL/I. М.:ИПМ им.М.В.Келдыша АН СССР, 1987. - 79 с.
+- С.А.Романенко. **Система программирования Рефал-2 для ЕС ЭВМ.
+  Интерфейс Рефала и PL/I.** - М.:ИПМ им.М.В.Келдыша АН СССР, 1987. - 79
+  с.
 
 Реализации Рефала нашли практическое применение благодаря тому, что не
 были "вещью в себе", а использовались в сочетании с языками "нижнего
@@ -129,6 +130,29 @@ author: Сергей Романенко
 числа. Какой вывод?
 
 ---
+
+## Ссылки (Julia) 1
+
+- Tim Besard, Valentin Churavy, Alan Edelman, Bjorn De Sutter. **Rapid
+  software prototyping for heterogeneous and distributed platforms.**
+  Advances in Engineering Software, Volume 132, 2019, Pages 29-46, ISSN
+  0965-9978.  
+  <https://doi.org/10.1016/j.advengsoft.2019.02.002>
+
+- Martin Biel, Arda Aytekin, Mikael Johansson. **POLO.Jl: Policy-based
+  optimization algorithms in Julia.** Advances in Engineering Software,
+  Volume 136, 2019, 102695, ISSN 0965-9978.  
+  <https://doi.org/10.1016/j.advengsoft.2019.102695>
+
+---
+
+## Ссылки (Julia) 2
+
+- Tim Besard, Christophe Foket, Bjorn De Sutter. **Effective Extensible Programming: Unleashing Julia on GPUs.** In _IEEE Transactions on Parallel and Distributed Systems_, vol. 30, no. 4, pp. 827-841, 1 April 2019.  
+<https://doi.org/10.1109/TPDS.2018.2872064>
+
+---
+
 
 <!-- _class: lead -->
 
@@ -420,8 +444,8 @@ encounter(kitty, simba) ⟹ "Kitty meets Simba and slinks"
 ```julia
 abstract type Peano end
 struct Zero <: Peano end
-struct Succ{T<:Peano} <: Peano
-  prev::T
+struct Succ <: Peano
+  prev::Peano
 end
 ```
 
@@ -449,13 +473,17 @@ add(x::Succ, y::Peano) = Succ(add(x.prev, y))
 ```
 
 ```julia
-add(p2, p3) ⟹ Succ(Succ(Succ(Succ(Succ(Zero)))))
+add(p2, p3) ⟹ Succ(Succ(Succ(Succ(Succ(Zero())))))
 ```
 
 Здесь вычисления выполняются во время компиляции.
 
-А если смешать вычисления над типами с вычислениями над "обычными"
-значениями?
+> Строго говоря`add` выполняет вычисления над **значениям**. Однако, у
+> значений типа `Peano`, информация содержится в тегах (типах), а данные
+> \- ничего не содержат.
+
+А что, если смешать вычисления над типами с вычислениями над
+"нормальными" значениями?
 
 ---
 
@@ -480,8 +508,8 @@ CodeInfo(
 ) ⇒ Float64
 ```
 
-Компилятор (1) сгенерировал три версии метода `pw` и (2) раскрыл вызовы
-этих методов.
+Компилятор **(1)** сгенерировал три версии метода `pw` и **(2)** раскрыл
+вызовы этих методов.
 
 ---
 
@@ -536,7 +564,7 @@ pw(Val(3), 2) ⟹ 8
 Использование `Val` в реализации можно скрыть от конечного пользователя:
 
 ```julia
-pw(n::Integer, x) = pw(Val(n), x)
+pw(n::Int64, x) = pw(Val(n), x)
 ```
 
 ---
@@ -565,7 +593,7 @@ CodeInfo(
 
 <!-- _class: lead -->
 
-## Остаточная программа с проверками условий:<br/> :nose::question:
+## Остаточная программа с динамическими проверками условий<br/> :nose::question:
 
 <br/><br/><br/>
 
@@ -617,6 +645,132 @@ CodeInfo(
 ```
 
 Классические частичные вычисления!
+
+---
+
+<!-- _class: lead -->
+
+## Пакет `StaticNumbers`
+
+<br/>
+
+### static(99)
+
+<br/><br/>
+
+---
+
+## `static(x)` - помечает, что желательно,<br/> чтобы результат был статическим
+
+```julia
+using StaticNumbers
+
+d = 2
+s = static(2)
+```
+
+Макрос @stat делает результат вычисления статическим, если в нём
+участвуют константы и/или переменные со статическими значениями.
+
+```julia
+s + s ⟹ 4
+@stat s + s ⟹ static(4)
+@stat s + 2 ⟹ static(4)
+@stat s + d ⟹ 4
+```
+
+<!--
+---
+
+```julia
+Tuple(i^2 for i in static(1):static(4))
+  ⟹ (1, 4, 9, 16)
+```
+
+```julia
+@code_typed Tuple(i^2 for i in static(1):static(4))
+  ⟹
+CodeInfo(
+1 ─     invoke Base.power_by_squaring(
+          static(1)::StaticInteger{1}, 2::Int64)::Int64
+└──     return (1, 4, 9, 16)
+) => NTuple{4, Int64}
+```
+
+---
+
+```julia
+@code_typed Tuple(i^2 for i in 1:4)
+  ⟹
+CodeInfo(
+1 ─ %1 = invoke Base.collect(_2::Base.Generator{UnitRange{Int64}, var"#5#6"})::Vector{Int64}
+│   %2 = Core._apply_iterate(Base.iterate, Core.tuple, %1)::Tuple{Vararg{Int64, N} where N}
+└──      return %2
+) => Tuple{Vararg{Int64, N} where N}
+```
+-->
+
+---
+
+## Снова - функция возведения в степень
+
+```julia
+pw_s(n, x) =
+  iszero(n) ? one(x) : x * pw_s(static(n-1), x)
+
+pw_s(3, 10)
+  ⟹ 1000
+```
+
+``` julia
+@code_typed pw_s(static(3), 10)
+  ⟹
+CodeInfo(
+1 ─      goto #3 if not false
+2 ─      nothing::Nothing
+3 ┄ %3 = Base.mul_int(x, 1)::Int64
+│   %4 = Base.mul_int(x, %3)::Int64
+│   %5 = Base.mul_int(x, %4)::Int64
+└──      return %5
+) => Int64
+```
+
+---
+
+## Снова - функция Аккермана
+
+```julia
+function A(m,n)
+    if iszero(m)
+        n + one(n)
+    elseif iszero(n)
+        A(@stat(m - one(m)), one(n))
+    else
+        A(@stat(m - one(m)), A(m, n - one(n)))
+    end
+end
+```
+
+Когда следует использовать `static`, а когда - `@stat`? Из описания
+пакета `StaticNumbers` это не совсем понятно.
+
+(Ясно, что `static` "обёртывает" число, а `@stat` - анализирует выражение. Но почему бы тогда не использовать `@stat` везде?.)
+
+---
+
+## Ускорение при специализации
+
+```julia
+using BenchmarkTools
+
+@btime A(4, 1)
+  13.930 s (0 allocations: 0 bytes)
+65533
+
+@btime A(static(4), 1)
+  2.035 s (0 allocations: 0 bytes)
+65533
+```
 
 ---
 

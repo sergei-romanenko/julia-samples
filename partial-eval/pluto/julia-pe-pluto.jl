@@ -14,8 +14,8 @@ abstract type Peano end
 struct Zero <: Peano end
 
 # ╔═╡ 453ef133-b302-4088-beeb-8c389c978830
-struct Succ{T<:Peano} <: Peano
-	prev::T
+struct Succ <: Peano
+	prev::Peano
 end
 
 # ╔═╡ bcc1bf85-af16-439a-9815-3a44e42e7e94
