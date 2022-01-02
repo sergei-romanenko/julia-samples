@@ -444,8 +444,8 @@ encounter(kitty, simba) ⟹ "Kitty meets Simba and slinks"
 ```julia
 abstract type Peano end
 struct Zero <: Peano end
-struct Succ <: Peano
-  prev::Peano
+struct Succ{T <: Peano} <: Peano
+  prev::T
 end
 ```
 
@@ -458,7 +458,7 @@ p3 = Succ(p2)
 ```
 
 ```julia
-p1 ⟹ Succ(Zero())
+p1 ⟹ Succ{Zero}(Zero())
 p1.prev ⟹ Zero()
 Succ(Zero()) == p1 ⟹ true
 ```
