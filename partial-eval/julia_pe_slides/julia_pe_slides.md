@@ -650,10 +650,62 @@ CodeInfo(
 
 Классические частичные вычисления!
 
+---
+
+<!-- _class: lead -->
+
+## Специализация высшего порядка
+
+### :star2::sparkle: (по функциям) :sparkle::star2:
+
+<br/><br/>
+
+---
+
+## Типы функций
+
+```julia
+mul2(x) = x * 2
+mul3(x) = x * 3
+
+typeof(mul2) ⟹ typeof(mul2)
+supertype(typeof(mul2)) ⟹ Function
+typeof(mul2) <: Function ⟹ true
+
+typeof(mul2) === typeof(mul3) ⟹ false
+```
+
+- Типы всех функций являются подтипами `Function`.
+- Каждая функция имеет **уникальный** тип.
+
+> **Вывод:** специализация по типам функций и специализация по функциям
+> \- это **одно и то же**.
+
+---
+
+## Специализация по функциям
+
+```julia
+const mul6 = mul3 ∘ mul2
+typeof(mul6) ⟹
+    ComposedFunction{typeof(mul3), typeof(mul2)}
+mul6(10) ⟹ 60
+```
+```julia
+@code_llvm mul6(10) ⟹
+define i64
+  @julia_ComposedFunction_1834(i64 signext %0) {
+top:
+    %1 = mul i64 %0, 6
+  ret i64 %1
+}
+```
+
+Получилась функция, которая умножает аргумент на 6.
+
 <!--
 ---
 
-<!--- _class: lead --->
 
 ## Пакет `StaticNumbers`
 
