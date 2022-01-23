@@ -18,7 +18,7 @@ author: Сергей Романенко
 ## С.А.Романенко
 
 ИПМ им. М.В. Келдыша РАН, Москва<br/>
-28 декабря 2021
+23 января 2022
 
 ---
 
@@ -411,7 +411,7 @@ meets(a::Cat, b::Dog) = "hisses"
 meets(a::Cat, b::Cat) = "slinks"
 ```
 
-Теперь можно вызывать `encouner`
+Теперь можно вызывать `encounter`
 
 ```julia
 encounter(rex, fido) ⟹ "Rex meets Fido and sniffs"

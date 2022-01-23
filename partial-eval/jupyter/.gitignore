@@ -2,3 +2,4 @@
 *.pdf
 *.html
 !*.dot.svg
+.ipynb_checkpoints
