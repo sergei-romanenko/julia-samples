@@ -2,5 +2,12 @@
   "markdown.marp.breaks": "off",
   "markdown.marp.themes": [
     "./custom.css"
+  ],
+  "cSpell.words": [
+    "поуправлять",
+    "специализатор",
+    "специализаторов",
+    "специализаторы",
+    "Суперкомпилятор"
   ]
 }

@@ -691,6 +691,7 @@ typeof(mul6) ⟹
     ComposedFunction{typeof(mul3), typeof(mul2)}
 mul6(10) ⟹ 60
 ```
+
 ```julia
 @code_llvm mul6(10) ⟹
 define i64
@@ -705,7 +706,6 @@ top:
 
 <!--
 ---
-
 
 ## Пакет `StaticNumbers`
 
