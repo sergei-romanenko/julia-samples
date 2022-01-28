@@ -18,7 +18,7 @@ author: Сергей Романенко
 ## С.А.Романенко
 
 ИПМ им. М.В. Келдыша РАН, Москва<br/>
-23 января 2022
+28 января 2022
 
 ---
 
@@ -447,24 +447,26 @@ encounter(kitty, simba) ⟹ "Kitty meets Simba and slinks"
 
 ```julia
 abstract type Peano end
-struct Zero <: Peano end
-struct Succ{T <: Peano} <: Peano
-  prev::T
-end
-```
+struct Z <: Peano end
+struct S{T <: Peano} <: Peano end
 
-```julia
 typeof(Peano) ⟹ DataType
-p0 = Zero()
-p1 = Succ(p0)
-p2 = Succ(p1)
-p3 = Succ(p2)
+```
+
+
+```julia
+p0 = Z()
+p1 = S{Z}()
+p2 = S{S{Z}}()
+p3 = S{S{S{Z}}}()
 ```
 
 ```julia
-p1 ⟹ Succ{Zero}(Zero())
-p1.prev ⟹ Zero()
-Succ(Zero()) == p1 ⟹ true
+succ(x::Peano) = S{typeof(x)}()
+pred(x::S{X}) where {X} = X()
+
+pred(p1) ⟹ Z()
+succ(p0) === p1 ⟹ true
 ```
 
 ---
@@ -472,12 +474,12 @@ Succ(Zero()) == p1 ⟹ true
 ## Сложение чисел Пеано
 
 ```julia
-add(x::Zero, y::Peano) = y
-add(x::Succ, y::Peano) = Succ(add(x.prev, y))
+add(x::Z, y::Peano) = y
+add(x::S, y::Peano) = succ(add(pred(x), y))
 ```
 
 ```julia
-add(p2, p3) ⟹ Succ(Succ(Succ(Succ(Succ(Zero())))))
+add(p2, p3) ⟹ S{S{S{S{S{Z}}}}}()
 ```
 
 Здесь вычисления выполняются во время компиляции.
@@ -494,8 +496,8 @@ add(p2, p3) ⟹ Succ(Succ(Succ(Succ(Succ(Zero())))))
 ## Возведение в степень
 
 ```julia
-pw(n::Zero, x) = one(x)
-pw(n::Succ, x) = x * pw(n.prev, x)
+pw(n::Z, x) = one(x)
+pw(n::S, x) = x * pw(pred(n), x)
 ```
 
 ```julia
@@ -606,22 +608,23 @@ CodeInfo(
 ## Проверка принадлежности к списку
 
 ```julia
-function one_of(::Val{s}, ::Val{k}, x) where {s, k}
+one_of(x, s::NTuple{N, T}) where {N, T} =
+    one_of(x, Val(s), Val(N))
+
+function one_of(x, ::Val{s}, ::Val{k}) where {s, k}
   if k == 0
     false
   elseif s[length(s) - k + 1] == x
     true
   else
-    one_of(Val(s), Val(k-1), x)
+    one_of(x, Val(s), Val(k-1))
   end
 end
-
-one_of(s::NTuple, x) = one_of(Val(s), Val(length(s)), x)
 ```
 
 ```julia
-one_of((:A, :B, :C), :B) ⟹ true
-one_of((:A, :B, :C), :Q) ⟹ false
+one_of(:B, (:A, :B, :C)) ⟹ true
+one_of(:Q, (:A, :B, :C)) ⟹ false
 ```
 
 **Тонкость:** параметр `Val(k)` сделан **убывающим**! Зачем?
@@ -631,7 +634,7 @@ one_of((:A, :B, :C), :Q) ⟹ false
 ## Остаточная программа для `one_of`
 
 ```julia
-@code_typed one_of(Val((:A, :B)), Val(2), :D)
+@code_typed one_of(:D, Val((:A, :B)), Val(2))
 ⟹
 CodeInfo(
 1 ─       goto #3 if not false
@@ -693,13 +696,13 @@ mul6(10) ⟹ 60
 ```
 
 ```julia
-@code_llvm mul6(10) ⟹
-define i64
-  @julia_ComposedFunction_1834(i64 signext %0) {
-top:
-    %1 = mul i64 %0, 6
-  ret i64 %1
-}
+@code_typed mul6(10) ⟹
+CodeInfo(
+1 ─ %1 = Core.getfield(x, 1)::Int64
+│   %2 = Base.mul_int(%1, 2)::Int64
+│   %3 = Base.mul_int(%2, 3)::Int64
+└──      return %3
+) => Int64
 ```
 
 Получилась функция, которая умножает аргумент на 6.
