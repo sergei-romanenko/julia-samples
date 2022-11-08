@@ -1,24 +1,24 @@
 ---
 marp: true
 theme: custom
-size: 4:3
+<!--size: 4:3-->
 paginate: true
 
-title: Специализация программ в недрах реализации языка Julia
+title: Специализация программ в недрах экосистемы Julia
 author: Сергей Романенко
 ---
 
 <!-- _class: lead -->
 <!-- _paginate: false -->
 
-# Специализация программ в недрах реализации языка Julia
+# Специализация программ в недрах экосистемы Julia
 
 <br/>
 
 ## С.А.Романенко
 
 ИПМ им. М.В. Келдыша РАН, Москва<br/>
-28 января 2022
+8 ноября 2022
 
 ---
 
@@ -155,6 +155,22 @@ author: Сергей Романенко
   Parallel and Distributed Systems_, vol. 30, no. 4, pp. 827-841, 1
   April 2019.  
 <https://doi.org/10.1109/TPDS.2018.2872064>
+
+- Benjamin Biggs, Ian McInerney, Eric C. Kerrigan, George A.
+  Constantinides. **High-level Synthesis using the Julia Language.**
+  Presented at the 2nd Workshop on Languages, Tools, and Techniques for
+  Accelerator Design (LATTE'22), March 1, 2022.  
+  <https://arxiv.org/abs/2201.11522>
+
+---
+
+## Ссылки (Julia) 3
+
+- Luo, Xiu-Zhe & Jinguo, Liu & Zhang, Pan & Wang, Lei. (2020). **Yao.jl:
+  Extensible, Efficient Framework for Quantum Algorithm Design.**
+  Quantum. 4\. 341\. 10.22331/q-2020-10-11-341.  
+  <https://quantum-journal.org/papers/q-2020-10-11-341/>
+  <https://arxiv.org/abs/1912.10877>
 
 ---
 
@@ -360,69 +376,135 @@ type_to_str2(x::String) = "String"
 
 ---
 
-## Как определять новые типы?
+## Абстрактные и конкретные типы
 
 ```julia
-abstract type Pet end
-struct Dog <: Pet; name::String end
-struct Cat <: Pet; name::String end
-```
+abstract type Entity end
+abstract type Creature <: Entity end
+struct God <: Entity end
 
-- Типы делятся на **абстрактные** и **конкретные**.
-- Значения абстрактных типов создавать нельзя (и они не содержат данных).
-- Значения конкретных данных создавать можно (и они могут содержать данные).
-  - `rex = Dog("Rex")`
-- Для абстрактных типов **можно** определять **подтипы**.
-- Для конкретных типов **нельзя** определять **подтипы**.
+struct Human <: Creature
+    name::String
+end
 
----
-
-## Абстрактная "встреча зверей"
-
-Создаём зоопарк:
-
-```Julia
-rex = Dog("Rex")
-fido = Dog("Fido")
-kitty = Cat("Kitty")
-simba = Cat("Simba")
-```
-
-Определяем понятие "встречи" для зверей:
-
-```julia
-function encounter(a::Pet, b::Pet)
-  verb = meets(a, b)
-  "$(a.name) meets $(b.name) and $verb"
+struct Dog <: Creature
+    name::String
 end
 ```
 
-Теперь нужно определить действие, которое совершается при встрече зверей
-разных типов.
+- Абстрактные типы не содержат данных, но могут иметь подтипы.
+- Конкретные struct-типы могут содержать данные, но не могут иметь
+  подтипы.
 
 ---
 
-## Применение мульти-диспетчеризации
+## Создание struct-значений
 
 ```julia
-meets(a::Dog, b::Dog) = "sniffs"
-meets(a::Dog, b::Cat) = "chases"
-meets(a::Cat, b::Dog) = "hisses"
-meets(a::Cat, b::Cat) = "slinks"
+god = God()
+john = Human("John")
+rex = Dog("Rex")
 ```
 
-Теперь можно вызывать `encounter`
+- Можно определять дополнительные конструкторы.
+
+```Julia
+Human() = Human("Ivan")
+```
 
 ```julia
-encounter(rex, fido) ⟹ "Rex meets Fido and sniffs"
-encounter(rex, kitty) ⟹ "Rex meets Kitty and chases"
-encounter(kitty, rex) ⟹ "Kitty meets Rex and hisses"
-encounter(kitty, simba) ⟹ "Kitty meets Simba and slinks"
+ivan = Human()
 ```
 
 ---
 
-## Особенности системы типов в Julia
+## Функции и методы
+
+- Функция может иметь несколько _**методов**_.
+- Методы различаются по _**числу**_ аргументов и по _**типам**_
+  аргументов.
+- Более _**частные**_ методы имеют приоритет над более _**общими**_, а
+  определяются \- _**в любом порядке**_.
+
+```julia
+get_name(e) = error("a $(typeof(e)) is nameless")
+get_name(::God) = "God"
+get_name(x::Creature) = x.name
+```
+
+```julia
+get_name(god)  ⟹ "God"
+get_name(john) ⟹ "John"
+get_name(rex)  ⟹ "Rex"
+```
+
+---
+
+## Множественная диспетчеризация
+
+```julia
+eats(e1, e2) =
+  error("`eats` undefined for $(typeof(e1)) and $(typeof(e2)))")
+eats(e1::Entity, e2::Entity) = false
+eats(::Human, ::Dog) = true
+```
+
+```julia
+eats("Aa", 100) ⟹
+  error("`eats` undefined for String and Int64")
+eats(john, god) ⟹ false
+eats(john, rex) ⟹ true
+```
+
+---
+
+<!-- _class: lead -->
+
+## Модули, импорт<br/>и<br/>доопределение функций<br/> :arrow_double_up: :arrow_double_down: :white_check_mark:
+
+---
+
+## Модули, импорт и доопределение (1)
+
+```julia
+module Heavens
+
+export Entity, Creature, get_name, eats
+
+abstract type Entity end
+abstract type Creature <: Entity end
+...
+```
+
+```julia
+module Earth
+
+using Heavens
+import Heavens: get_name, eats
+
+struct Devil <: Creature end
+get_name(::Devil) = "Lucifer"
+```
+
+---
+
+## Модули, импорт и доопределение (2)
+
+- `using` даёт возможность _**использовать**_ типы и методы из другого
+  модуля.
+- `import` даёт возможность _**добавлять**_ новые методы к функции,
+  принадлежащей к другому модулю. (Не модифицируя исходный текст другого
+  модуля.)
+- Возможность добавлять методы основана на том, что _**порядок**_, в
+  котором определяются методы - _**несуществен**_! При этом, более
+  _**частные**_ методы имеют _**приоритет**_ над более общими.
+- Типичный способ расширения функции: добавляем новый _**подтип**_ к
+  абстрактному типу и добавляем новые _**методы**_ для обработки этого
+  подтипа.
+
+---
+
+## Итог: особенности системы типов в Julia
 
 Отличия от C++, Java, Python, ...
 
@@ -437,84 +519,56 @@ encounter(kitty, simba) ⟹ "Kitty meets Simba and slinks"
 
 <!-- _class: lead -->
 
-## Вычисления с типами<br/>:computer: :question: ⟹ :fire::exclamation:
+## Множественные реализации интерфейсов<br/>:grimacing::grimacing::grimacing:
 
 <br/><br/><br/>
 
 ---
 
-## Числа Пеано
+## Пример: тип - один, моноидов - много
 
 ```julia
-abstract type Peano end
-struct Z <: Peano end
-struct S{T <: Peano} <: Peano end
+abstract type Monoid{T} end
 
-typeof(Peano) ⟹ DataType
-```
+function mOne(::Monoid{T}, x::T)::T where {T}
+    one(x)
+end
 
-```julia
-p0 = Z()
-p1 = S{Z}()
-p2 = S{S{Z}}()
-p3 = S{S{S{Z}}}()
-```
+function mMult(::Monoid{T}, x::T, y::T)::T where {T}
+    x * y
+end
 
-```julia
-succ(x::Peano) = S{typeof(x)}()
-pred(x::S{X}) where {X} = X()
-
-pred(p1) ⟹ Z()
-succ(p0) === p1 ⟹ true
+function pw(m::Monoid{T}, n::Int, x::T)::T where {T}
+    if n <= 0
+        mOne(m, x)
+    else
+        mMult(m, x, pw(m, n - 1, x))
+    end
+end
 ```
 
 ---
 
-## Сложение чисел Пеано
+## Разные моноиды для разных типов
 
 ```julia
-add(x::Z, y::Peano) = y
-add(x::S, y::Peano) = succ(add(pred(x), y))
+struct StringMonoid <: Monoid{String} end
+
+struct IntMultMonoid <: Monoid{Int} end
+
+struct IntAddMonoid <: Monoid{Int} end
+
+mOne(::IntAddMonoid, x::Int) = 0
+mMult(::IntAddMonoid, x::Int, y::Int) = x + y
 ```
+
+Теперь для одного типа можно определить несколько моноидов.
 
 ```julia
-add(p2, p3) ⟹ S{S{S{S{S{Z}}}}}()
+pw(StringMonoid(),  3, "Ab") ⇒ "AbAbAb"
+pw(IntMultMonoid(), 3, 2)     ⇒ 8
+pw(IntAddMonoid(),  3, 2)     ⇒ 6
 ```
-
-Здесь вычисления выполняются во время компиляции.
-
-> Строго говоря`add` выполняет вычисления над **значениям**. Однако, у
-> значений типа `Peano`, информация содержится в тегах (типах), а данные
-> \- ничего не содержат.
-
-А что, если смешать вычисления над типами с вычислениями над
-"нормальными" значениями?
-
----
-
-## Возведение в степень
-
-```julia
-pw(n::Z, x) = one(x)
-pw(n::S, x) = x * pw(pred(n), x)
-```
-
-```julia
-pw(p2, 2.0) ⟹ 4.0
-```
-
-```julia
-@code_typed pw(p2, 2.0) ⟹
-
-CodeInfo(
-1 ─ %1 = Base.mul_float(x, 1.0)::Float64
-│   %2 = Base.mul_float(x, %1)::Float64
-└──      return %2
-) ⇒ Float64
-```
-
-Компилятор **(1)** сгенерировал три версии метода `pw` и **(2)** раскрыл
-вызовы этих методов.
 
 ---
 
@@ -526,7 +580,21 @@ CodeInfo(
 
 ---
 
-## Отображение констант в типы
+## Обёртывание констант в типы
+
+Тип `Val` определён в стандартной библиотеке:
+
+```julia
+struct Val{x} end
+
+Val(x) = Val{x}()
+```
+
+Тип `Val{c}` населён единственным значением `Val{c}()`, которое
+порождается конструктором `Val(c)`.
+
+Хитрость состоит в том, что параметр `x` **не обязан быть типом**! И
+может быть "обычной" константой!
 
 ```julia
 Val(99) ⟹ Val{99}()
@@ -534,10 +602,11 @@ typeof(Val(99)) ⟹ Val{99}
 Val((1, 2, (3, 4))) ⟹ Val{(1, 2, (3, 4))}()
 ```
 
-Тип `Val{c}` населён единственным значением `Val{c}()`, которое
-порождается конструктором `Val(c)`.
+---
 
-Это значение можно "выковырнуть" из типа!
+## Извлечение констант из типов
+
+Значение можно "выковырнуть" из типа!
 
 ```julia
 get_val(::Val{n}) where {n} = n
@@ -548,6 +617,13 @@ get_val(Val(99)) ⟹ 99
 get_val(Val((1,2,(3,4)))) ⟹ (1,2,(3,4))
 get_val(Val((:L,:D))) ⟹ (:L,:D)
 ```
+
+**Ограничение.**
+
+Параметр в `Val` должен быть "константой", т.е. представим в виде
+комбинации битов известной длины.
+
+Строка `"L"` - не годится, а символ `:L` - годится.
 
 ---
 
@@ -593,6 +669,32 @@ CodeInfo(
 `Val{n}` и раскрыл вызовы этих методов.
 
 > Сделал ровно то, что сделал бы классический частичный вычислитель!
+
+---
+
+## Специализация `pw` ещё и по моноиду
+
+```julia
+function pw(m::Monoid{T}, ::Val{n}, x::T)::T where {T, n}
+    if n <= 0
+        mOne(m, x)
+    else
+        mMult(m, x, pw(m, Val(n - 1), x))
+    end
+end
+```
+
+```julia
+@code_typed pw(IntAddMonoid(), Val(3), 2)
+⟹
+CodeInfo(
+1 ─      nothing::Nothing
+│   %2 = Base.add_int(x, 0)::Int64
+│   %3 = Base.add_int(x, %2)::Int64
+│   %4 = Base.add_int(x, %3)::Int64
+└──      return %4
+) => Int64
+```
 
 ---
 
@@ -705,140 +807,6 @@ CodeInfo(
 ```
 
 Получилась функция, которая умножает аргумент на 6.
-
-<!--
----
-
-## Пакет `StaticNumbers`
-
-<br/>
-
-### static(99)
-
-<br/><br/>
-
--->
-
-<!--
----
-
-## `static(x)` - помечает, что желательно,<br/> чтобы результат был статическим
-
-```julia
-using StaticNumbers
-
-d = 2
-s = static(2)
-```
-
-Макрос @stat делает результат вычисления статическим, если в нём
-участвуют константы и/или переменные со статическими значениями.
-
-```julia
-s + s ⟹ 4
-@stat s + s ⟹ static(4)
-@stat s + 2 ⟹ static(4)
-@stat s + d ⟹ 4
-```
-
--->
-
-<!--
----
-
-```julia
-Tuple(i^2 for i in static(1):static(4))
-  ⟹ (1, 4, 9, 16)
-```
-
-```julia
-@code_typed Tuple(i^2 for i in static(1):static(4))
-  ⟹
-CodeInfo(
-1 ─     invoke Base.power_by_squaring(
-          static(1)::StaticInteger{1}, 2::Int64)::Int64
-└──     return (1, 4, 9, 16)
-) => NTuple{4, Int64}
-```
-
----
-
-```julia
-@code_typed Tuple(i^2 for i in 1:4)
-  ⟹
-CodeInfo(
-1 ─ %1 = invoke Base.collect(_2::Base.Generator{UnitRange{Int64}, var"#5#6"})::Vector{Int64}
-│   %2 = Core._apply_iterate(Base.iterate, Core.tuple, %1)::Tuple{Vararg{Int64, N} where N}
-└──      return %2
-) => Tuple{Vararg{Int64, N} where N}
-```
--->
-
-<!--
----
-
-## Снова - функция возведения в степень
-
-```julia
-pw_s(n, x) =
-  iszero(n) ? one(x) : x * pw_s(static(n-1), x)
-
-pw_s(3, 10)
-  ⟹ 1000
-```
-
-``` julia
-@code_typed pw_s(static(3), 10)
-  ⟹
-CodeInfo(
-1 ─      goto #3 if not false
-2 ─      nothing::Nothing
-3 ┄ %3 = Base.mul_int(x, 1)::Int64
-│   %4 = Base.mul_int(x, %3)::Int64
-│   %5 = Base.mul_int(x, %4)::Int64
-└──      return %5
-) => Int64
-```
-
----
-
-## Снова - функция Аккермана
-
-```julia
-function A(m,n)
-    if iszero(m)
-        n + one(n)
-    elseif iszero(n)
-        A(@stat(m - one(m)), one(n))
-    else
-        A(@stat(m - one(m)), A(m, n - one(n)))
-    end
-end
-```
-
-Когда следует использовать `static`, а когда - `@stat`? Из описания
-пакета `StaticNumbers` это не совсем понятно.
-
-(Ясно, что `static` "обёртывает" число, а `@stat` - анализирует
-выражение. Но почему бы тогда не использовать `@stat` везде?.)
-
----
-
-## Ускорение при специализации
-
-```julia
-using BenchmarkTools
-
-@btime A(4, 1)
-  13.930 s (0 allocations: 0 bytes)
-65533
-
-@btime A(static(4), 1)
-  2.035 s (0 allocations: 0 bytes)
-65533
-```
-
--->
 
 ---
 
@@ -976,6 +944,107 @@ using BenchmarkTools
   2.060 s (0 allocations: 0 bytes)
 65533
 ```
+
+---
+
+<!-- _class: lead -->
+
+## 1-я проекция Футамуры
+
+### На примере интерпретатора языка<br/>стековой машины<br/>:tongue::scissors:<br/><br/>
+
+<br/><br/>
+
+---
+
+## Команды и последовательности команд
+
+Абстрактный тип команд
+
+```julia
+abstract type Instr end
+```
+
+Объявление функции - интерпретатора команды
+
+```julia
+function run(instr::Instr, s::Tuple)::Tuple end
+```
+
+Модифицирует стек `s` и его же выдаёт в качестве результата.
+
+---
+
+## Последовательность команд
+
+```julia
+struct Seq{I1 <: Instr, I2 <: Instr} <: Instr
+    instr1::I1
+    instr2::I2
+end
+```
+
+```julia
+run(i::Seq, s::Tuple) = run(i.instr2, run(i.instr1, s))
+```
+
+---
+
+## Разные команды
+
+```julia
+struct Push{x} <: Instr end
+
+run(::Push{x}, s::Tuple) where {x} = (x, s)
+```
+
+```julia
+struct Op2{f} <: Instr end
+
+Op2(f) = Op2{f}()
+
+function run(::Op2{f}, s::Tuple) where {f}
+    x2 = s[1]
+    x1 = s[2][1]
+    (f(x1, x2), s[2][2])
+end
+```
+
+---
+
+## Исполнение программы
+
+```text
+run(Seq(Push(100), Seq(Push(200), Op2((+)))), ())
+  ⟹ (300, ())
+
+run(Seq(Push(:Aa), Seq(Push(:Bb), Op2((==)))), ())
+  ⟹ (false, ())
+```
+
+---
+
+## Достигается 1-я проекция Футамуры!
+
+Специализация интерпретатора по отношению к программе.
+
+```julia
+@code_typed run(Seq(Push(100), Seq(Push(200), Op2((+)))), ())
+⟹
+CodeInfo(
+1 ─     return (300, ())
+) => Tuple{Int64, Tuple{}}
+```
+
+```julia
+@code_typed run(Seq(Push(:Aa), Seq(Push(:Bb), Op2((==)))), ())
+⟹
+CodeInfo(
+1 ─     return (false, ())
+) => Tuple{Bool, Tuple{}}
+```
+
+Интерпретатор статически "исполняется" по отношению к программе.
 
 ---
 

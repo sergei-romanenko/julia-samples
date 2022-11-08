@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.3
+# v0.19.14
 
 using Markdown
 using InteractiveUtils
@@ -240,7 +240,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
 [[Random]]
-deps = ["Serialization"]
+deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[Requires]]
@@ -251,6 +251,7 @@ version = "1.2.0"
 
 [[SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
