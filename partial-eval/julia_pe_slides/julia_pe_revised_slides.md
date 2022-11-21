@@ -1,7 +1,7 @@
 ---
 marp: true
 theme: custom
-<!--size: 4:3-->
+size: 4:3
 paginate: true
 
 title: Специализация программ в недрах экосистемы Julia
