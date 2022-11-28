@@ -18,7 +18,7 @@ author: Сергей Романенко
 ## С.А.Романенко
 
 ИПМ им. М.В. Келдыша РАН, Москва<br/>
-8 ноября 2022
+28 ноября 2022
 
 ---
 
@@ -268,7 +268,7 @@ function pw(n, x)
   if iszero(n)
     one(x)
   else
-    x * pw(n-1, x)
+    x * pw(n - 1, x)
   end
 end
 ```
@@ -530,19 +530,15 @@ get_name(::Devil) = "Lucifer"
 ```julia
 abstract type Monoid{T} end
 
-function mOne(::Monoid{T}, x::T)::T where {T}
-    one(x)
-end
+m_one(::Monoid{T}, x::T) where {T} = one(x)
 
-function mMult(::Monoid{T}, x::T, y::T)::T where {T}
-    x * y
-end
+m_mult(::Monoid{T}, x::T, y::T) where {T} = x * y
 
 function pw(m::Monoid{T}, n::Int, x::T)::T where {T}
     if n <= 0
-        mOne(m, x)
+        m_one(m, x)
     else
-        mMult(m, x, pw(m, n - 1, x))
+        m_mult(m, x, pw(m, n - 1, x))
     end
 end
 ```
@@ -558,8 +554,8 @@ struct IntMultMonoid <: Monoid{Int} end
 
 struct IntAddMonoid <: Monoid{Int} end
 
-mOne(::IntAddMonoid, x::Int) = 0
-mMult(::IntAddMonoid, x::Int, y::Int) = x + y
+m_one(::IntAddMonoid, x::Int) = 0
+m_mult(::IntAddMonoid, x::Int, y::Int) = x + y
 ```
 
 Теперь для одного типа можно определить несколько моноидов.
@@ -677,9 +673,9 @@ CodeInfo(
 ```julia
 function pw(m::Monoid{T}, ::Val{n}, x::T)::T where {T, n}
     if n <= 0
-        mOne(m, x)
+        m_one(m, x)
     else
-        mMult(m, x, pw(m, Val(n - 1), x))
+        m_mult(m, x, pw(m, Val(n - 1), x))
     end
 end
 ```
@@ -715,7 +711,7 @@ one_of(x, s::NTuple{N, T}) where {N, T} =
 function one_of(x, ::Val{s}, ::Val{k}) where {s, k}
   if k == 0
     false
-  elseif s[length(s) - k + 1] == x
+  elseif s[k] == x
     true
   else
     one_of(x, Val(s), Val(k-1))
@@ -724,8 +720,8 @@ end
 ```
 
 ```julia
-one_of(:B, (:A, :B, :C)) ⟹ true
-one_of(:Q, (:A, :B, :C)) ⟹ false
+one_of(300, (100, 200, 300)) ⟹ true
+one_of(400, (100, 200, 300)) ⟹ false
 ```
 
 **Тонкость:** параметр `Val(k)` сделан **убывающим**! Зачем?
@@ -735,20 +731,19 @@ one_of(:Q, (:A, :B, :C)) ⟹ false
 ## Остаточная программа для `one_of`
 
 ```julia
-@code_typed one_of(:D, Val((:A, :B)), Val(2))
+@code_typed one_of(300, Val((100, 200)), Val(2))
 ⟹
 CodeInfo(
-1 ─       goto #3 if not false
-2 ─       nothing::Nothing
-3 ┄ %3  = (:A === x)::Bool
-└──       goto #5 if not %3
-4 ─       return true
-5 ─ %6  = (:B === x)::Bool
-└──       goto #7 if not %6
-6 ─       goto #8
-7 ─       goto #8
-8 ┄ %10 = φ (#6 => true, #7 => false)::Bool
-└──       return %10
+1 ─      nothing::Nothing
+│   %2 = (200 === x)::Bool
+└──      goto #3 if not %2
+2 ─      return true
+3 ─ %5 = (100 === x)::Bool
+└──      goto #5 if not %5
+4 ─      goto #6
+5 ─      goto #6
+6 ┄ %9 = φ (#4 => true, #5 => false)::Bool
+└──      return %9
 ) ⇒ Bool
 ```
 
@@ -862,11 +857,11 @@ pw(Val(3), 10) ⟹
 ## Доопределения операций
 
 ```julia
-import Base: -
+import Base: iszero, one, -
 
-Base.iszero(::Val{n}) where {n} = iszero(n)
+iszero(::Val{n}) where {n} = iszero(n)
 
-Base.one(::Val{n}) where {n} = one(n)
+one(::Val{n}) where {n} = one(n)
 
 -(::Val{m}, n) where {m} = Val(m - n)
 ```
@@ -978,22 +973,29 @@ function run(instr::Instr, s::Tuple)::Tuple end
 ## Последовательность команд
 
 ```julia
-struct Seq{I1 <: Instr, I2 <: Instr} <: Instr
-    instr1::I1
-    instr2::I2
-end
+struct Seq{I1 <: Instr, I2 <: Instr} <: Instr end
+
+Seq(::I1, ::I2) where {I1 <: Instr, I2 <: Instr} =
+    Seq{I1, I2}()
+
+run(::Seq{I1, I2}, s::Tuple) where {I1 <: Instr, I2 <: Instr} =
+    run(I2(), run(I1(), s))
 ```
 
-```julia
-run(i::Seq, s::Tuple) = run(i.instr2, run(i.instr1, s))
-```
+Главная хитрость заключается в том, что все команды определяются как
+"пустышки", которые не содержат полей. А реальная информация
+сосредоточена в их типах.
+
+Поэтому, `I1()` всегда генерирует одну и ту же команду.
 
 ---
 
-## Разные команды
+## Команды `Push{x}` и `Op2`
 
 ```julia
 struct Push{x} <: Instr end
+
+Push(x) = Push{x}()
 
 run(::Push{x}, s::Tuple) where {x} = (x, s)
 ```
@@ -1020,6 +1022,9 @@ run(Seq(Push(100), Seq(Push(200), Op2((+)))), ())
 
 run(Seq(Push(:Aa), Seq(Push(:Bb), Op2((==)))), ())
   ⟹ (false, ())
+
+run(Seq(Push(200), Op2((+))), (100, ()))
+  ⟹ (300, ())
 ```
 
 ---
@@ -1029,22 +1034,19 @@ run(Seq(Push(:Aa), Seq(Push(:Bb), Op2((==)))), ())
 Специализация интерпретатора по отношению к программе.
 
 ```julia
-@code_typed run(Seq(Push(100), Seq(Push(200), Op2((+)))), ())
+@code_typed run(Seq(Push(200), Op2((+))), (100, ()))
 ⟹
 CodeInfo(
-1 ─     return (300, ())
+1 ─ %1 = Base.getfield(s, 1, true)::Int64
+│   %2 = Base.add_int(%1, 200)::Int64
+│   %3 = Core.tuple(%2, ())::Tuple{Int64, Tuple{}}
+└──      return %3
 ) => Tuple{Int64, Tuple{}}
 ```
 
-```julia
-@code_typed run(Seq(Push(:Aa), Seq(Push(:Bb), Op2((==)))), ())
-⟹
-CodeInfo(
-1 ─     return (false, ())
-) => Tuple{Bool, Tuple{}}
-```
-
-Интерпретатор статически "исполняется" по отношению к программе.
+Интерпретатор статически "исполняется" по отношению к программе. В
+результате, и интерпретатор, и исходная программа "сплавляются". И
+возникает их "гибрид" - "остаточная программа"...
 
 ---
 
