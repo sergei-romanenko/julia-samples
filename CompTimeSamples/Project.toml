@@ -1,0 +1,9 @@
+name = "CompTimeSamples"
+uuid = "2380ca9d-266e-418a-bf8b-7bc0c0c9679e"
+authors = ["Sergei Romanenko <sergei.romanenko@supercompilers.ru>"]
+version = "0.1.0"
+
+[deps]
+CompTime = "0fb5dd42-039a-4ca4-a1d7-89a96eae6d39"
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
