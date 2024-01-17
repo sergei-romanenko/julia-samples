@@ -1,0 +1,8 @@
+name = "CUDA_Plaground"
+uuid = "000d89c8-ac7f-49b4-bb50-439fda73edba"
+authors = ["Sergei Romanenko <sergei.romanenko@supercompilers.ru>"]
+version = "0.1.0"
+
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
