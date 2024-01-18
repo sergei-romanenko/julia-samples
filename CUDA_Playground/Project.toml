@@ -1,4 +1,4 @@
-name = "CUDA_Plaground"
+name = "CUDA_Playground"
 uuid = "000d89c8-ac7f-49b4-bb50-439fda73edba"
 authors = ["Sergei Romanenko <sergei.romanenko@supercompilers.ru>"]
 version = "0.1.0"
