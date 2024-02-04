@@ -1,5 +1,5 @@
-name = "FwDiff"
-uuid = "a0b35062-d9e3-4b2c-ad2c-ba287b134e68"
+name = "AutoDiffPlayground"
+uuid = "6919ba2e-586b-400a-8e04-8b3ae8b94c52"
 authors = ["Sergei Romanenko <sergei.romanenko@supercompilers.ru>"]
 version = "0.1.0"
 
