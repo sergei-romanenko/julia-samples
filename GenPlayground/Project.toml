@@ -4,5 +4,6 @@ authors = ["Sergei Romanenko <sergei.romanenko@supercompilers.ru>"]
 version = "0.1.0"
 
 [deps]
+Continuables = "79afa230-ca09-11e8-120b-5decf7bf5e25"
 IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
 ResumableFunctions = "c5292f4c-5179-55e1-98c5-05642aab7184"
