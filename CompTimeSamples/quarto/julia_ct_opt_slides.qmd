@@ -1,0 +1,483 @@
+---
+title: "Julia: оптимизация вычислений во время компиляции"
+author: "Сергей А. Романенко"
+date: "4/23/2024"
+format:
+  revealjs:
+    theme: default
+    code-fold: false
+    code-line-numbers: false
+    # code-block-border-left: true
+    # code-block-font-size: 0.55em
+    slide-number: true
+    # smaller: true
+    embed-resources: true
+    pdf-separate-fragments: true
+execute: 
+  echo: true
+jupyter: julia-1.10
+---
+
+## Прелюдия
+
+```{julia}
+using CompTime, InteractiveUtils, MacroTools
+```
+
+```{julia}
+#| output: false
+cleanup = MacroTools.flatten ∘ Base.remove_linenums!
+```
+
+
+## Императивное вычисление $x^n$ за $O(n)$
+
+```{julia}
+#| output: false
+function pw_naive_loop(n, x)
+    r = one(x)
+    for k in 1:n
+        r = r * x
+    end
+    return r
+end
+```
+
+Проверяем (на строках)
+
+```{julia}
+Tuple(pw_naive_loop(n, "Abc") for n in 0:5)
+```
+
+Проверяем (на числах)
+
+```{julia}
+Tuple(pw_naive_loop(n, 3) for n in 0:5)
+```
+
+
+## Рекурсивное вычисление $x^n$ за $O(n)$
+
+Если $n>0$ сводим задачу к более простой, для $n-1$.
+
+```{julia}
+#| output: false
+function pw_naive_rec(n, x)
+    if iszero(n)
+        one(x)
+    else
+        x * pw_naive_rec(n - 1, x)
+    end
+end
+```
+
+Проверяем
+
+```{julia}
+Tuple(pw_naive_rec(n, "Abc") for n in 0:5)
+```
+
+## Рекурсивное вычисление $x^n$ за $O(\log n)$
+<!-- 
+```{julia}
+#| output: false
+function pw_rec(n, x)
+    if iszero(n)
+        one(x)
+    elseif isone(n)
+        x
+    elseif isodd(n)
+        x * pw_rec(n - 1, x)
+    else
+        pw_rec(n ÷ 2, x * x)
+    end
+end
+```
+ -->
+
+Для $n>0$, если $n$ - чётное, сводим задачу к случаю $n \div 2$.
+
+```{julia}
+#| output: false
+function pw_rec(n, x)
+    if iszero(n)
+        one(x)
+    elseif isodd(n)
+        x * pw_rec(n - 1, x)
+    else
+        pw_rec(n ÷ 2, x * x)
+    end
+end
+```
+
+Проверяем
+
+```{julia}
+Tuple(pw_rec(n, "Abc") for n in 0:5)
+```
+
+## Специализация функции по $n$
+<!-- 
+```{julia}
+#| output: false
+function pw_rec_pe(::Val{n}, x) where {n}
+    if iszero(n)
+        one(x)
+    elseif isone(n)
+        x
+    elseif isodd(n)
+        x * pw_rec_pe(Val(n - 1), x)
+    else
+        pw_rec_pe(Val(n ÷ 2), x * x)
+    end
+end
+```
+ -->
+
+Перенос `n` из данных в тип, приводит к тому, что компилятор производит вычисления над `n` во время компиляции!
+
+```{julia}
+#| output: false
+function pw_rec_pe(::Val{n}, x) where {n}
+    if iszero(n)
+        one(x)
+    elseif isodd(n)
+        x * pw_rec_pe(Val(n - 1), x)
+    else
+        pw_rec_pe(Val(n ÷ 2), x * x)
+    end
+end
+```
+
+Проверяем
+
+```{julia}
+Tuple(pw_rec_pe(Val(n), "Abc") for n in 0:5)
+```
+
+## Вот что получается {.smaller}
+
+```{julia}
+@code_typed pw_rec_pe(Val(5), 10.0)
+```
+
+- Использование специализации функций по типам, встроенной в Джулию,
+  часто позволяет обойтись без метапрограммирования.
+- Компилятор достаточно хитёр: он умеет распространять константы,
+  удалять недостижимый код и раскрывать вызовы функций.
+- Компилятор не сумел удалить избыточное умножение на `1.0` поскольку
+  для этого надо знать свойства `1.0` и `*` (что $x * 1.0 = x$ для
+  любого $x$).
+- Специалисты по вычислительным методам любят записывать алгоритмы с
+  помощью циклов, а не с помощью рекурсии.
+
+<!-- 
+## Переход к хвостовой рекурсии
+
+```{julia}
+#| output: false
+function pw_tail_rec(n, x)
+    if iszero(n)
+        one(x)
+    else
+        pw_tail_rec(n, one(x), x)
+    end
+end
+```
+
+## Переход к хвостовой рекурсии
+
+```{julia}
+#| output: false
+function pw_tail_rec(n, r, x)
+    @assert !iszero(n)
+    if isone(n)
+        r * x
+    elseif isodd(n)
+        pw_tail_rec(n - 1, r * x, x)
+    else
+        pw_tail_rec(n ÷ 2, r, x * x)
+    end
+end
+```
+ -->
+
+## Переход к хвостовой рекурсии
+
+```{julia}
+#| output: false
+function pw_tail_rec(n, x)
+    pw_tail_rec(n, one(x), x)
+end
+
+function pw_tail_rec(n, r, x)
+    if iszero(n)
+        r
+    elseif isodd(n)
+        pw_tail_rec(n - 1, r * x, x)
+    else
+        pw_tail_rec(n ÷ 2, r, x * x)
+    end
+end
+```
+
+Проверяем:
+
+```{julia}
+Tuple(pw_tail_rec(n, "Abc") for n = 0:5)
+```
+
+## Замена рекурсии на цикл
+<!-- 
+```{julia}
+#| output: false
+function pw_loop(n, x)
+    if iszero(n)
+        return one(x)
+    else
+        r = one(x)
+
+        while n > 1
+            if isodd(n)
+                r = r * x
+                n = n - 1
+            else
+                x = x * x
+                n = n ÷ 2
+            end
+        end
+
+        return r * x
+    end
+end
+```
+ -->
+
+```{julia}
+#| output: false
+function pw_loop(n, x)
+    r = one(x)
+    while n > 0
+        if isodd(n)
+            r = r * x; n = n - 1
+        else
+            x = x * x; n = n ÷ 2
+        end
+    end
+    return r
+end
+```
+
+Проверяем:
+
+```{julia}
+Tuple(pw_loop(n, "Abc") for n = 0:5)
+```
+
+## Вычисления над $n$ во время компиляции
+
+```{julia}
+#| output: false
+@generated function pw_gen(::Val{n}, x) where {n}
+    k = n
+    b = Expr[]
+    push!(b, :(r = one(x)))
+
+    while k > 0
+        if isodd(k)
+            push!(b, :(r = r * x)); k = k - 1
+        else
+            push!(b, :(x = x * x)); k = k ÷ 2
+        end
+    end
+
+    push!(b, :(return r))
+    b = quote $(b...) end
+    Core.println(string(cleanup(b)))
+    return b
+end
+```
+
+## Какой код получается
+
+```{julia}
+pw_gen(Val(7), "Abc")
+```
+
+- Сгенерированный код напечатался из-за того, что в определение функции
+  был, для отладки, вставлен вызов `Core.println`.
+
+## Использование пакета `CompTime`
+
+```{julia}
+#| output: false
+@ct_enable function pw_ct(@ct(n), x)
+    @ct(k = n)
+    r = one(x)
+
+    @ct_ctrl while k > 0
+        @ct_ctrl if isodd(k)
+            r = r * x; @ct(k = k - 1)
+        else
+            x = x * x; @ct(k = k ÷ 2)
+        end
+    end
+    return r
+end
+```
+
+- Функция `pw_ct` получается из функции `pw_loop` добавлением аннотаций
+  `@ct...`
+- `n` - часть типа и неизменяема. Поэтому - присваивается в
+  переменную `k`.
+
+## Разные способы исполнения {.smaller}
+
+Чем хорош пакет `CompTime`?
+
+- Можно написать функцию как "обыкновенную" - и отладить её обычными
+  способами.
+- Затем - превратить её в генератор программ, добавив аннотации.
+- После этого сохраняется возможность исполнять функцию и в качестве
+  генератора и как "обычную" функцию.
+
+Генерация (и исполнение того, что получится):
+
+```{julia}
+Tuple(pw_ct(Val{n}, "Abc") for n = 0:5)
+```
+
+Исполнение (при этом аннотации игнорируются):
+
+```{julia}
+Tuple(runtime(pw_ct, n, "Abc") for n = 0:5)
+```
+
+<!-- 
+```{julia}
+Tuple(comptime(pw_ct, Val{n}, "Abc") for n = 0:5)
+```
+ -->
+
+## Результат генерации (@code_typed)
+
+```{julia}
+@code_typed pw_ct(Val{5}, 10)
+```
+
+- Компилятор кое-что подчистил, но осталось лишнее умножение на $1$.
+
+## Результат генерации (debug)
+
+`debug` позволяет увидеть, что получается сразу после генерации, до
+того, как компилятор выполняет разные оптимизации.
+
+```{julia}
+debug(pw_ct, Val{5}, 10) |> cleanup
+```
+
+## Оптимизация вычислений с `r` {.smaller}
+
+```{julia}
+#| output: false
+@ct_enable function pw_opt_ct(@ct(n), x)
+    @ct_ctrl if iszero(n)
+        return one(x)
+    else
+        @ct(k = n); @ct(r1 = true)
+
+        @ct_ctrl while k > 1
+            @ct_ctrl if isodd(k)
+                @ct_ctrl if r1
+                    r = x; @ct(r1 = false)
+                else
+                    r = r * x
+                end
+                @ct(k = k - 1)
+            else
+                x = x * x; @ct(k = k ÷ 2)
+            end
+        end
+
+        @ct_ctrl if r1
+            return x
+        else
+            return r * x
+        end
+    end
+end
+```
+
+- Нет умножений на `one(x)` и нет лишних присваиваний `r`.
+
+## Что получается {.smaller}
+
+Для разных $n$:
+
+```{julia}
+Tuple(pw_opt_ct(Val{n}, "Abc") for n in 0:5)
+```
+
+Для чисел:
+
+```{julia}
+@code_typed pw_opt_ct(Val{5}, 10)
+```
+
+Для строк:
+
+```{julia}
+@code_typed pw_opt_ct(Val{5}, "Abc")
+```
+
+- Умножения на `one(x)` - нет.
+
+<!-- ## Что получается (debug) {.scrollable} -->
+## Что получается (debug)
+
+<!-- ::: {.panel-tabset} -->
+
+<!-- ### 0 -->
+
+$n=0$
+
+```{julia}
+debug(pw_opt_ct, Val{0}, 10) |> cleanup
+```
+
+<!-- ### 1 -->
+
+$n=1$
+
+```{julia}
+debug(pw_opt_ct, Val{1}, 10) |> cleanup
+```
+
+<!-- ### 4 -->
+## Что получается (debug)
+
+$n=4$
+
+```{julia}
+debug(pw_opt_ct, Val{4}, 10) |> cleanup
+```
+
+<!-- ### 5 -->
+## Что получается (debug)
+
+$n=5$
+
+```{julia}
+debug(pw_opt_ct, Val{5}, 10) |> cleanup
+```
+
+<!-- ### 7 -->
+## Что получается (debug)
+
+$n=7$
+
+```{julia}
+debug(pw_opt_ct, Val{7}, 10) |> cleanup
+```
+
+<!-- ::: -->
