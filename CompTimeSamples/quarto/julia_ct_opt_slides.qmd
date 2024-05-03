@@ -4,12 +4,12 @@ author: "Сергей А. Романенко"
 date: "4/23/2024"
 format:
   revealjs:
-    theme: default
-    css: julia_ct_opt_slides.css
+    theme: [default, julia_ct_opt_slides.scss]
     from: markdown+emoji
     lang: ru-RU
     code-fold: false
     code-line-numbers: false
+    code-block-height: 600px
     slide-number: true
     smaller: true
     embed-resources: false
@@ -39,7 +39,7 @@ jupyter: julia-1.10
 
 ## Julia: что будем использовать?
 
-В примерах программ используюся несколько пакетов:
+В примерах программ используются несколько пакетов:
 
 ```{julia}
 using CompTime, InteractiveUtils, MacroTools
@@ -141,7 +141,7 @@ Tuple(pw_naive_loop(n, "Abc") for n in 0:5)
 Tuple(pw_naive_loop(n, 3) for n in 0:5)
 ```
 
-- Для строк, `*` - конкатенация, а `one(String)` - `""`.
+- Для строк, `*` - конкатенация, а `one(String)` - это `""`.
 
 
 ## Рекурсивное вычисление $x^n$<br/>за время $O(n)$
