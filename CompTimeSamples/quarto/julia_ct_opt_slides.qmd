@@ -50,16 +50,9 @@ using CompTime, InteractiveUtils, MacroTools
 - `InteractiveUtils` - позволяет заглядывать в промежуточные результаты
   работы компилятора (с помощью макросов `@code_lowered` и
   `@code_typed`).
-- `MacroTools` - позволяет упростить программу, убрав лишние
-  `begin ... end` из.
-
-```{julia}
-#| output: false
-cleanup = MacroTools.flatten ∘ Base.remove_linenums!
-```
-
-- Определяем функцию, которая удаляет лишние `begin ... end` и номера
-  строк из исходной программы.
+- Функция `MacroTools.prettify` - позволяет почистить сгенерированную
+  программу, убрав лишние `begin ... end` и номера строк из исходной
+  программы.
 
 ## Julia: специализация функций по типам
 
@@ -71,11 +64,11 @@ sq(x) = x * x
 Вызываем с аргументами разных типов:
 
 ```{julia}
-(sq(3), sq(3.0), sq("Abc"))
+sq(3), sq(3.0), sq("Abc")
 ```
 
-В момент вызова под каждую комбинацию типов аргументов создаётся
-отдельная версия функции!
+В момент вызова под каждую встретившуюся комбинацию типов аргументов
+создаётся отдельная версия функции!
 
 ```{julia}
 @code_typed sq(3)
@@ -155,7 +148,7 @@ function pw_naive_rec(n, x::T) where {T}
     if iszero(n)
         one(T)
     else
-        x * pw_naive_rec(n - 1, x)
+        pw_naive_rec(n - 1, x) * x
     end
 end
 ```
@@ -177,7 +170,7 @@ function pw_rec(n, x::T) where {T}
     if iszero(n)
         one(T)
     elseif isodd(n)
-        x * pw_rec(n - 1, x)
+        pw_rec(n - 1, x) * x
     else
         pw_rec(n ÷ 2, x * x)
     end
@@ -200,31 +193,39 @@ struct Val{v} end
 Val(v) = Val{v}()
 ```
 
-Тип `Val{v}` населён единственным значением `Val{v}()`, которое
-порождается конструктором `Val(v)`.
+- Структура типа `Val{v}` не сордержит полей и является "пустышкой": вся
+  полезная информация содержится в её типе.
 
-Хитрость состоит в том, что параметр `v` может быть "обычной"
-константой!
+- Тип `Val{v}` населён единственным значением, которое порождается
+  конструктором с нулевым числом аргументов: `Val{v}()`.
+- `Val(v)` - это сокращение для `Val{v}()`.
+- Хитрость состоит в том, что параметр `v` может быть "обычной"
+  константой!
 
-```julia
-Val(99) ⟹ Val{99}()
-typeof(Val(99)) ⟹ Val{99}
-Val((1, 2, (3, 4))) ⟹ Val{(1, 2, (3, 4))}()
+```{julia}
+Val{99}, Val(99), typeof(Val(99)), Val((1, 2, (3, 4)))
 ```
+
 ## Извлечение констант из типов
 
 Значение можно "выковырнуть" из типа!
 
-```julia
+```{julia}
 get_val(::Val{n}) where {n} = n
 ```
 
 Проверяем:
 
-```julia
-get_val(Val(99)) ⟹ 99
-get_val(Val((1,2,(3,4)))) ⟹ (1,2,(3,4))
-get_val(Val((:L,:D))) ⟹ (:L,:D)
+```{julia}
+get_val(Val(99))
+```
+
+```{julia}
+get_val(Val((1,2,(3,4))))
+```
+
+```{julia}
+get_val(Val((:L,:D)))
 ```
 
 **Ограничение.**
@@ -232,7 +233,8 @@ get_val(Val((:L,:D))) ⟹ (:L,:D)
 Параметр в `Val` должен быть "константой", т.е. представим в виде
 комбинации битов известной длины.
 
-Строка `"L"` - не годится, а символ `:L` - годится.
+Массив `[1, 2]` - не годится, строка `"L"` - не годится, а символ `:L` -
+годится.
 
 ## Специализация функции по $n$
 
@@ -245,7 +247,7 @@ function pw_rec_pe(::Val{n}, x::T) where {n, T}
     if iszero(n)
         one(T)
     elseif isodd(n)
-        x * pw_rec_pe(Val(n - 1), x)
+        pw_rec_pe(Val(n - 1), x) * x
     else
         pw_rec_pe(Val(n ÷ 2), x * x)
     end
@@ -268,11 +270,12 @@ Tuple(pw_rec_pe(Val(n), "Abc") for n in 0:5)
   часто позволяет обойтись без метапрограммирования.
 - Компилятор достаточно хитёр: он умеет распространять константы,
   удалять недостижимый код и раскрывать вызовы функций.
-- Компилятор не сумел удалить избыточное умножение на `1.0` поскольку
-  для этого надо знать свойства `1.0` и `*` (что $x * 1.0 = x$ для
+- Компилятор не сумел удалить избыточное умножение на $1.0$ поскольку
+  для этого надо знать свойства $1.0$ и `*` (что $1.0 * x = x$ для
   любого $x$).
 - Специалисты по вычислительным методам любят записывать алгоритмы с
-  помощью циклов, а не с помощью рекурсии.
+  помощью циклов, а не с помощью рекурсии (что удобно при работе с
+  массивами и матрицами).
 
 ## Переход к хвостовой рекурсии
 
@@ -322,13 +325,57 @@ end
 Tuple(pw_loop(n, "Abc") for n = 0:5)
 ```
 
-## Вычисления над $n$ во время компиляции
+
+## "Генерирующие" функции
+
+```{julia}
+#| output: false
+@generated function bar(x)
+    x <: Integer ? :(x^2) : :(x)
+end
+```
+
+```{julia}
+bar(10), bar("Abc")
+```
+
+- Перед определением функции пишем аннотацию `@generated`.
+- Когда при исполнении программы происходит вызов функции, компилятор
+  вызывает эту функцию, но вместо ***значений*** параметров передаёт их
+  ***типы***.
+- Функция вырабатывает некоторое выражение, которое компилятор считает
+  телом функции - и компилирует его. Результат ***запоминается***.
+- Сгенерированная функция вызывается со ***значениями*** аргументов.
+- Если некоторая комбинация типов аргументов вызова встречается
+  несколько раз, генерация тела функции происходит только в ***первый***
+  раз.
+
+## Более "здоровый" стиль написания генераторов
+
+То, что вместо значений аргументов в генератор передаются их типы,
+как-то сбивает с толку. Но можно этим не пользоваться, и брать типы
+аргументов из деклараций типов.
+
+```{julia}
+#| output: false
+@generated function bar2(x::T) where {T}
+    T <: Integer ? :(x^2) : :(x)
+end
+```
+
+```{julia}
+bar2(10), bar2("Abc")
+```
+
+При этом, имена параметров используются только внутри `:(...)` и
+`quote ... end`.
+
+## Пишем генератор "голыми руками"
 
 ```{julia}
 #| output: false
 @generated function pw_gen(::Val{n}, x::T) where {n, T}
-    k = n
-    b = Expr[]
+    k = n; b = Expr[]
 
     push!(b, :(r = $(one(T))))
 
@@ -343,7 +390,7 @@ Tuple(pw_loop(n, "Abc") for n = 0:5)
     push!(b, :(return r))
 
     b = quote $(b...) end
-    Core.println(string(cleanup(b)))
+    Core.println(string(prettify(b)))
     return b
 end
 ```
@@ -354,8 +401,15 @@ end
 pw_gen(Val(7), "Abc")
 ```
 
+```{julia}
+pw_gen(Val(7), "Def")
+```
+
 - Сгенерированный код напечатался из-за того, что в определение функции
   был, для отладки, вставлен вызов `Core.println`.
+- Второй раз `Core.println` не вызвался, поскольку второй вызов - ***для
+  той же*** комбинации типов аргументов (`Val{7}, `String`), и генерация
+  второй раз не производится.
 
 ## Пакет `CompTime`
 
@@ -461,37 +515,38 @@ Tuple(runtime(pw_ct, n, "Abc") for n = 0:5)
 того, как компилятор выполняет разные оптимизации.
 
 ```{julia}
-debug(pw_ct, Val{5}, 10) |> cleanup
+debug(pw_ct, Val{3}, 10) |> prettify
 ```
+
+- Лишнее присваивание `r = 1` и лишнее умножение `r = r * x`. А можно 
+  просто присвоить `r = x`.
 
 ## Оптимизация вычислений с `r`
 
 ```{julia}
 #| output: false
 @ct_enable function pw_opt_ct(@ct(n), x::T) where {T}
-    @ct_ctrl if iszero(n) return @ct(one(T)) else
-        @ct(k = n); @ct(r1 = true)
+    @ct(k = n)
+    local r; @ct(r_one = true) # r = @ct(one(T))
 
-        @ct_ctrl while k > 1
-            @ct_ctrl if isodd(k)
-                @ct_ctrl if r1
-                    r = x; @ct(r1 = false)
-                else
-                    r = r * x
-                end
-                @ct(k = k - 1)
+    @ct_ctrl while k > 0
+        @ct_ctrl if isodd(k)
+            @ct_ctrl if r_one
+                r = x; @ct(r_one = false)
             else
-                x = x * x; @ct(k = k ÷ 2)
+                r = r * x
             end
+            @ct(k = k - 1)
+        else
+            x = x * x; @ct(k = k ÷ 2)
         end
-
-        @ct_ctrl if r1 return x else return r * x end
     end
+
+    @ct_ctrl if r_one return @ct(one(T)) else return r end
 end
 ```
 
-- Нет умножений на `one(T)`.
-- Нет лишних присваиваний `r`.
+- Нет умножений на `one(T)`!
 
 ## Результаты генерации
 
@@ -501,20 +556,17 @@ end
 Tuple(pw_opt_ct(Val{n}, "Abc") for n in 0:5)
 ```
 
-Для чисел:
+Для чисел - нет умножений на `1.0`!
 
 ```{julia}
-@code_typed pw_opt_ct(Val{5}, 10)
+@code_typed pw_opt_ct(Val{5}, 10.0)
 ```
 
-Для строк:
+Для строк - нет конкатенаций с `""`!
 
 ```{julia}
 @code_typed pw_opt_ct(Val{5}, "Abc")
 ```
-
-- Умножений на `one(T)` - нет.
-
 
 ## "Сырые" результаты генерации
 
@@ -525,7 +577,7 @@ Tuple(pw_opt_ct(Val{n}, "Abc") for n in 0:5)
 $n=0$
 
 ```{julia}
-debug(pw_opt_ct, Val{0}, 10) |> cleanup
+debug(pw_opt_ct, Val{0}, 10) |> prettify
 ```
 
 ### 1
@@ -533,7 +585,7 @@ debug(pw_opt_ct, Val{0}, 10) |> cleanup
 $n=1$
 
 ```{julia}
-debug(pw_opt_ct, Val{1}, 10) |> cleanup
+debug(pw_opt_ct, Val{1}, 10) |> prettify
 ```
 
 ### 2
@@ -541,7 +593,7 @@ debug(pw_opt_ct, Val{1}, 10) |> cleanup
 $n=2$
 
 ```{julia}
-debug(pw_opt_ct, Val{2}, 10) |> cleanup
+debug(pw_opt_ct, Val{2}, 10) |> prettify
 ```
 
 ### 3
@@ -549,7 +601,7 @@ debug(pw_opt_ct, Val{2}, 10) |> cleanup
 $n=3$
 
 ```{julia}
-debug(pw_opt_ct, Val{3}, 10) |> cleanup
+debug(pw_opt_ct, Val{3}, 10) |> prettify
 ```
 
 
@@ -558,7 +610,7 @@ debug(pw_opt_ct, Val{3}, 10) |> cleanup
 $n=4$
 
 ```{julia}
-debug(pw_opt_ct, Val{4}, 10) |> cleanup
+debug(pw_opt_ct, Val{4}, 10) |> prettify
 ```
 
 ### 5
@@ -566,7 +618,7 @@ debug(pw_opt_ct, Val{4}, 10) |> cleanup
 $n=5$
 
 ```{julia}
-debug(pw_opt_ct, Val{5}, 10) |> cleanup
+debug(pw_opt_ct, Val{5}, 10) |> prettify
 ```
 
 ### 6
@@ -574,7 +626,7 @@ debug(pw_opt_ct, Val{5}, 10) |> cleanup
 $n=6$
 
 ```{julia}
-debug(pw_opt_ct, Val{6}, 10) |> cleanup
+debug(pw_opt_ct, Val{6}, 10) |> prettify
 ```
 
 ### 7
@@ -582,7 +634,7 @@ debug(pw_opt_ct, Val{6}, 10) |> cleanup
 $n=7$
 
 ```{julia}
-debug(pw_opt_ct, Val{7}, 10) |> cleanup
+debug(pw_opt_ct, Val{7}, 10) |> prettify
 ```
 
 :::
@@ -693,7 +745,7 @@ horner_ct(Val{t}, 10)
 ## Схема Горнера: результат генерации
 
 ```{julia}
-debug(horner_ct, Val{t}, 10) |> cleanup
+debug(horner_ct, Val{t}, 10) |> prettify
 ```
 
 - Цикл - развёрнут.
