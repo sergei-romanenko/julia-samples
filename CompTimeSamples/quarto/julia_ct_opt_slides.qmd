@@ -26,6 +26,8 @@ jupyter: julia-1.10
 
 # Что такое Julia?
 
+![](julia-svgrepo-com.svg)
+
 - Julia - это "экосистема"...
 - "Экосистема" $\approx$ "система программирования".
 - Язык Julia - это часть "экосистемы" Julia.
@@ -447,6 +449,10 @@ pw_gen(Val(7), "Def")
     `@ct_ctrl`.
 - Реализация: <https://github.com/AlgebraicJulia/CompTime.jl>
 - Размер реализации: **267 строчек**. :clap:
+
+## Реализация пакета `CompTime`
+
+{{< include _CompTime.qml >}}
 
 ## Использование пакета `CompTime`
 
