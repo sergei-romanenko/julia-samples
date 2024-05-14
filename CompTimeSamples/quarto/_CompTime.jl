@@ -1,4 +1,3 @@
-```julia
 module CompTime
 export @ct_enable, runtime, comptime, generate_code, debug
 
@@ -266,4 +265,3 @@ function comptime_expr(expr)
 end
 
 end
-```
