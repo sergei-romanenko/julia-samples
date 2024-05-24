@@ -1,0 +1,474 @@
+---
+title: "Julia: оптимизации во время компиляции<br/>(HMM = Hidden Markov model)"
+author: "Сергей Анатольевич Романенко"
+institute: "Институт им. М.В.Келдыша РАН"
+date: today
+bibliography: shonan_hmm_slides.bib
+# csl: nature-no-superscript.csl
+title-slide-attributes: 
+  data-background-color: "beige"
+format:
+  revealjs:
+    theme:
+      - default
+      - shonan_hmm_slides.scss
+    from: markdown+emoji
+    lang: ru-RU
+    code-fold: false
+    code-line-numbers: false
+    code-block-height: 620px
+    slide-number: true
+    # smaller: true
+    embed-resources: false
+    # chalkboard: true
+execute: 
+  echo: true
+jupyter: julia-1.10
+---
+
+# Что такое Julia?
+
+![](julia-svgrepo-com.svg)
+
+- Julia - это "экосистема"...
+- "Экосистема" $\approx$ "система программирования".
+- Язык Julia - это часть "экосистемы" Julia.
+- Сайт: <https://julialang.org/>
+
+# Shonan Challenge
+
+Собрались люди в Сёнане (湘南) и придумали набор задач для генеративного
+программирования, который получил название:
+
+- **Shonan challenge for generative programming**, @Aktemur2013.
+
+## Скрытая марковская модель
+
+В HMM (hidden Markov model) вероятность перехода в следующее состояние
+вычисляется путём умножения матрицы на вектор, где матрица содержит
+вероятности переходов между состояниями.
+
+```c
+int ∗hmm(int n, int ∗∗a, int ∗v) {
+  int ∗w = (int∗) calloc(n, sizeof (int)),
+  for (int i = 0, i < n; i++)
+    for (int j =0; j < n; j++)
+      w[i] += a[i][j] ∗ v[j];
+  return w;
+}
+```
+
+Что требуется сделать?
+
+- В зависимости от уровня разреженности матрицы, нужно развернуть
+  некоторые циклы (полностью или частично).
+
+- Кроме того, желатлеьно упростить программу, используя свойства
+  умножения и сложения: $0 ∗ x = 0$ и $0 + x = x$.
+
+## Переписываем `hmm` на языке Julia
+
+```{julia}
+#| output: false
+function hmm(a::Matrix{T}, v::Vector{T}) where {T}
+    n = size(a, 1)
+    @assert size(a, 2) == n
+    @assert length(v) == n
+
+    w = zeros(T, size(v))
+    for i in 1:n
+        for j in 1:n
+            w[i] += a[i, j] * v[j]
+        end
+    end
+    return w
+end
+```
+
+# Что будем использовать?
+
+## Средства тестирования
+
+```{julia}
+using Test
+```
+
+```{julia}
+M3 = [11 12 13; 21 22 23; 31 32 33]
+```
+
+```{julia}
+V3 = [1, 2, 3]
+```
+
+```{julia}
+expected3 = [74, 134, 194]
+```
+
+```{julia}
+@test hmm(M3, V3) == expected3
+```
+
+## Пакет `CompTime`
+
+- Позволяет превращать обычные функции в генераторы функций.
+- Генератор получается из обычной функции следующим образом.
+  - Вставляем аннотацию `@ct_enable` перед определением функции.
+  - Каждый параметр `v`, значение которого будет известно во время
+    генерации функции, заменяем на `@ct(v)`.
+  - В теле функции каждое подвыражение `e`, которое должно вычисляться
+    во время генерации заменяем на `@ct(e)`.
+  - Перед управляющими конструкциями (`while`, `for`, `if`), которые
+    должны быть вычислены во время генерации, вставляем аннотацию
+    `@ct_ctrl`.
+- Реализация: <https://github.com/AlgebraicJulia/CompTime.jl>
+- Размер реализации: **267 строчек**. :clap:
+
+## Пример использования `CompTime`
+
+```{julia}
+using CompTime
+```
+
+```{julia}
+#| output: false
+@ct_enable function pw_ct(@ct(n), x::T) where {T}
+    r = @ct(one(T))
+    @ct_ctrl for i in 1:n
+        r = r * x
+    end
+    return r
+end
+```
+
+```{julia}
+runtime(pw_ct, 3, 0.5)
+```
+
+```{julia}
+pw_ct(Val{3}, 0.5)
+```
+
+```{julia}
+pw_ct(Val{3}, "Abc")
+```
+
+# Как посмотреть, что генерируется? {.smaller}
+
+```{julia}
+debug(pw_ct, Val{3}, 10)
+```
+
+# Подчистка генерируемого кода
+
+```{julia}
+include("MacroUtils.jl")
+using .MacroUtils: cleanup
+```
+
+Для отладки, используем функцию `cleanup`, которая убирает лишние блоки
+`begin ... end` и удаляет константые выражения, значения которых не
+используются (вроде `begin 1; 2; 3 end` ⇒ `begin 3 end`).
+
+```{julia}
+debug(pw_ct, Val{3}, 10) |> cleanup
+```
+Ну вот, теперь результат генерации выглядит "по-человечески".
+
+# Движение к цели
+
+> "У самурая нет цели, а есть только Путь!"
+
+Но мы - не самураи, и будем двигаться к Цели!
+
+## Замена массивов на кортежи
+
+Сущность `c` можно закодировать типом `Val{c}`, если `c` - неизменяема и
+представима фиксированным набором битов.
+
+Массив - это ***изменяемый*** объект. Поэтому, заменим двумерный массив
+на кортеж кортежей.
+
+```{julia}
+A3 = (11, 12, 13), (21, 22, 23), (31, 32, 33)
+```
+
+```{julia}
+typeof(A3)
+```
+
+```{julia}
+typeof(A3) == NTuple{3, NTuple{3, Int64}}
+```
+
+## Версия функции `hmm` с кортежами
+
+```{julia}
+#| output: false
+function hmm_rt(a::Tuple, v::Vector{T}) where {T}
+    n = length(a)
+    @assert typeof(a) == NTuple{n,NTuple{n,T}}
+    @assert length(v) == n
+
+    w = zeros(T, n)
+    for i in 1:n
+        ai = a[i]
+        for j in 1:n
+            w[i] += ai[j] * v[j]
+        end
+    end
+    return w
+end
+```
+
+Проверяем:
+
+```{julia}
+@test hmm_rt(A3, V3) == expected3
+```
+
+## Первая попытка
+
+```{julia}
+#| output: false
+@ct_enable function hmm_ct1(@ct(a::Tuple), v::Vector{T}) where {T}
+    @ct n = length(a)
+    @ct @assert typeof(a) == NTuple{n,NTuple{n,T}}
+    @assert length(v) == @ct n
+
+    w = zeros(T, @ct n)
+    for i in 1:@ct n
+        ai = a[i]
+        for j in 1:@ct n
+            w[i] += ai[j] * v[j]
+        end
+    end
+    return w
+end
+```
+
+## Что получилось?
+
+```{julia}
+@test runtime(hmm_ct1, A3, V3) == expected3
+```
+
+
+Подставилась длина строк и столбцов.
+
+```{julia}
+debug(hmm_ct1, Val{A3}, V3) |> cleanup
+```
+
+```{julia}
+@test hmm_ct1(Val{A3}, V3) == expected3
+```
+
+## Вторая попытка
+
+```{julia}
+#| output: false
+@ct_enable function hmm_ct2(@ct(a::Tuple), v::Vector{T}) where {T}
+    @ct n = length(a)
+    @ct @assert typeof(a) == NTuple{n,NTuple{n,T}}
+    @assert length(v) == @ct n
+
+    w = zeros(T, @ct n)
+    @ct_ctrl for i in 1:n
+        ai = a[@ct i]
+        @ct_ctrl for j in 1:n
+            w[@ct i] += ai[@ct j] * v[@ct j]
+        end
+    end
+    return w
+end
+```
+
+## Что получилось?
+
+Развернулись циклы.
+
+```{julia}
+debug(hmm_ct2, Val{A3}, V3) |> cleanup
+```
+
+```{julia}
+@test hmm_ct2(Val{A3}, V3) == expected3
+```
+
+## Третья попытка
+
+```{julia}
+#| output: false
+@ct_enable function hmm_ct3(@ct(a::Tuple), v::Vector{T}) where {T}
+    @ct n = length(a)
+    @ct @assert typeof(a) == NTuple{n,NTuple{n,T}}
+    @assert length(v) == @ct n
+
+    w = zeros(T, @ct n)
+    @ct_ctrl for i in 1:n
+        @ct ai = a[i]
+        @ct_ctrl for j in 1:n
+            w[@ct i] += (@ct ai[j]) * v[@ct j]
+        end
+    end
+    return w
+end
+```
+
+## Что получилось?
+
+Элементы матрицы `a` - подставились.
+
+```{julia}
+debug(hmm_ct3, Val{A3}, V3) |> cleanup
+```
+
+```{julia}
+@test hmm_ct3(Val{A3}, V3) == expected3
+```
+
+# Дополнительные оптимизации
+
+## Матрицы с нулями и единицами
+
+Посмотрим, что будет, если матрицы содержат много нулей и единиц.
+
+```{julia}
+#| output: false
+A5 =
+   (0, 0, 0, 0, 0),
+   (2, 0, 0, 0, 0),
+   (2, 1, 0, 0, 0),
+   (0, 0, 4, 5, 6),
+   (0, 3, 4, 5, 6)
+```
+
+```{julia}
+#| output: false
+V5 = [1, 2, 3, 4, 5]
+```
+
+```{julia}
+#| output: false
+expected5 = [0, 2, 4, 62, 68]
+```
+
+```{julia}
+@test hmm_ct3(Val{A5}, V5) == expected5
+```
+
+## Что получается? {.smaller}
+
+```{julia}
+debug(hmm_ct3, Val{A5}, V5) |> cleanup
+```
+
+Много глупых операций с `0` и `1`!
+
+## Какие оптимизации добавляем?
+
+Видно, что желательно добавить следующие оптимизации.
+
+- Устранять умножения на `zero(T)` and `one(T)` и сложения с `zero(T)`.
+- Не развёртывать внутренний цикл, если количество ненулевых элементов
+  в строке матрицы `a[i]` `>=` заданного порога `m`.
+
+Второе условие можно изящно проверить, вычислив
+
+```julia
+sum(a[i] .!= 0) >= m
+```
+
+## Добавляем оптимизации!
+
+```{julia}
+#| output: false
+@ct_enable function hmm_ct_opt(@ct(a::Tuple), @ct(m::Int), v::Vector{T}) where {T}
+    @ct n = length(a)
+    @assert length(v) == @ct n
+    @ct @assert typeof(a) == NTuple{n,NTuple{n,T}}
+
+    w = zeros(T, @ct n)
+    @ct_ctrl for i in 1:n
+        @ct ai = a[i]
+        @ct_ctrl if sum(ai .!= 0) >= m
+            for j in 1:@ct n
+                w[@ct i] += (@ct ai)[j] * v[j]
+            end
+        else
+            @ct_ctrl for j in 1:n
+                @ct_ctrl if ai[j] == one(T)
+                    w[@ct i] += v[@ct j]
+                elseif ai[j] != zero(T)
+                    w[@ct i] += (@ct ai[j]) * v[@ct j]
+                end
+            end
+        end
+    end
+    return w
+end
+```
+
+## Что получается? {.smaller}
+
+Вычисляем `hmm_ct_opt(Val{A5}, Val{m}, V5)` для разных `m`.
+
+::: {.panel-tabset}
+
+### 0
+
+```{julia}
+#| echo: false
+debug(hmm_ct_opt, Val{A5}, Val{0}, V5) |> cleanup
+```
+
+### 1
+
+```{julia}
+#| echo: false
+debug(hmm_ct_opt, Val{A5}, Val{1}, V5) |> cleanup
+```
+
+### 2
+
+```{julia}
+#| echo: false
+debug(hmm_ct_opt, Val{A5}, Val{2}, V5) |> cleanup
+```
+
+### 3
+
+```{julia}
+#| echo: false
+debug(hmm_ct_opt, Val{A5}, Val{3}, V5) |> cleanup
+```
+
+
+### 4
+
+```{julia}
+#| echo: false
+debug(hmm_ct_opt, Val{A5}, Val{4}, V5) |> cleanup
+```
+
+### 5
+
+```{julia}
+#| echo: false
+debug(hmm_ct_opt, Val{A5}, Val{5}, V5) |> cleanup
+```
+
+:::
+
+
+<!-- 
+```{julia}
+@test hmm_ct_opt(Val{A5}, Val{3}, V5) == expected5
+```
+ -->
+
+# Ссылки
+
+::: {#refs}
+:::
