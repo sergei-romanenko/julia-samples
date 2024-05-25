@@ -16,7 +16,7 @@ format:
     code-line-numbers: false
     code-block-height: 600px
     slide-number: true
-    smaller: true
+    # smaller: true
     embed-resources: false
     # chalkboard: true
 execute: 
@@ -51,8 +51,14 @@ jupyter: julia-1.10
 
 В примерах программ используются несколько пакетов:
 
+<!-- 
 ```{julia}
 using CompTime, InteractiveUtils, MacroTools
+```
+ -->
+
+```{julia}
+using CompTime, InteractiveUtils
 ```
 
 - `CompTime` - позволяет записывать генерирующие фунции (`@generated`) в
@@ -60,9 +66,15 @@ using CompTime, InteractiveUtils, MacroTools
 - `InteractiveUtils` - позволяет заглядывать в промежуточные результаты
   работы компилятора (с помощью макросов `@code_lowered` и
   `@code_typed`).
-- Функция `MacroTools.prettify` - позволяет почистить сгенерированную
-  программу, убрав лишние `begin ... end` и номера строк из исходной
-  программы.
+
+```{julia}
+include("MacroUtils.jl")
+using .MacroUtils: cleanup
+```
+
+- Для отладки, используем функцию `cleanup`, которая убирает лишние
+  блоки `begin ... end` и удаляет константые выражения, значения которых
+  не используются (вроде `begin 1; 2; 3 end` ⇒ `begin 3 end`).
 
 
 # Специализация функциональных программ
@@ -177,8 +189,7 @@ Tuple(pw_naive_rec(n, "Abc") for n in 0:5)
 
  -->
 
-
-## Разделяй и властвуй {.smaller}
+## Разделяй и властвуй
 
 :::: {.columns}
 
@@ -416,8 +427,8 @@ bar(10), bar("Abc")
   несколько раз, генерация тела функции происходит только в ***первый***
   раз.
 
-::: {.callout-note}
-## При генерации, вместо значениий параметров передаются их типы!
+::: {.callout}
+**При генерации, вместо значениий параметров передаются их типы!**
 
 Сомнительное решение - лучше бы обращение к параметру считалось ошибкой.
 
@@ -446,7 +457,7 @@ bar(10), bar("Abc")
     push!(b, :(return r))
 
     b = quote $(b...) end
-    Core.println(string(prettify(b)))
+    Core.println(string(cleanup(b)))
     return b
 end
 ```
@@ -516,13 +527,13 @@ end
 ```{julia}
 #| output: false
 @ct_enable function pw_ct(@ct(n), x::T) where {T}
-    @ct(k = n)
+    @ct k = n
     r = @ct(one(T))
     @ct_ctrl while k > 0
         @ct_ctrl if isodd(k)
-            r = r * x; @ct(k = k - 1)
+            r = r * x; @ct k = k - 1
         else
-            x = x * x; @ct(k = k ÷ 2)
+            x = x * x; @ct k = k ÷ 2
         end
     end
     return r
@@ -579,7 +590,7 @@ Tuple(runtime(pw_ct, n, "Abc") for n = 0:5)
 того, как компилятор выполняет разные оптимизации.
 
 ```{julia}
-debug(pw_ct, Val{3}, 10) |> prettify
+debug(pw_ct, Val{3}, 10) |> cleanup
 ```
 
 - Лишнее присваивание `r = 1` и лишнее умножение `r = r * x`. А можно 
@@ -592,23 +603,23 @@ debug(pw_ct, Val{3}, 10) |> prettify
 ```{julia}
 #| output: false
 @ct_enable function pw_opt_ct(@ct(n), x::T) where {T}
-    @ct(k = n)
-    local r; @ct(r_one = true) # r = @ct(one(T))
+    @ct k = n
+    local r; @ct r_one = true # r = @ct(one(T))
 
     @ct_ctrl while k > 0
         @ct_ctrl if isodd(k)
             @ct_ctrl if r_one
-                r = x; @ct(r_one = false)
+                r = x; @ct r_one = false
             else
                 r = r * x
             end
-            @ct(k = k - 1)
+            @ct k = k - 1
         else
-            x = x * x; @ct(k = k ÷ 2)
+            x = x * x; @ct k = k ÷ 2
         end
     end
 
-    @ct_ctrl if r_one return @ct(one(T)) else return r end
+    @ct_ctrl if r_one return @ct one(T) else return r end
 end
 ```
 
@@ -643,7 +654,7 @@ Tuple(pw_opt_ct(Val{n}, "Abc") for n in 0:5)
 $n=0$
 
 ```{julia}
-debug(pw_opt_ct, Val{0}, 10) |> prettify
+debug(pw_opt_ct, Val{0}, 10) |> cleanup
 ```
 
 ### 1
@@ -651,7 +662,7 @@ debug(pw_opt_ct, Val{0}, 10) |> prettify
 $n=1$
 
 ```{julia}
-debug(pw_opt_ct, Val{1}, 10) |> prettify
+debug(pw_opt_ct, Val{1}, 10) |> cleanup
 ```
 
 ### 2
@@ -659,7 +670,7 @@ debug(pw_opt_ct, Val{1}, 10) |> prettify
 $n=2$
 
 ```{julia}
-debug(pw_opt_ct, Val{2}, 10) |> prettify
+debug(pw_opt_ct, Val{2}, 10) |> cleanup
 ```
 
 ### 3
@@ -667,7 +678,7 @@ debug(pw_opt_ct, Val{2}, 10) |> prettify
 $n=3$
 
 ```{julia}
-debug(pw_opt_ct, Val{3}, 10) |> prettify
+debug(pw_opt_ct, Val{3}, 10) |> cleanup
 ```
 
 
@@ -676,7 +687,7 @@ debug(pw_opt_ct, Val{3}, 10) |> prettify
 $n=4$
 
 ```{julia}
-debug(pw_opt_ct, Val{4}, 10) |> prettify
+debug(pw_opt_ct, Val{4}, 10) |> cleanup
 ```
 
 ### 5
@@ -684,7 +695,7 @@ debug(pw_opt_ct, Val{4}, 10) |> prettify
 $n=5$
 
 ```{julia}
-debug(pw_opt_ct, Val{5}, 10) |> prettify
+debug(pw_opt_ct, Val{5}, 10) |> cleanup
 ```
 
 ### 6
@@ -692,7 +703,7 @@ debug(pw_opt_ct, Val{5}, 10) |> prettify
 $n=6$
 
 ```{julia}
-debug(pw_opt_ct, Val{6}, 10) |> prettify
+debug(pw_opt_ct, Val{6}, 10) |> cleanup
 ```
 
 ### 7
@@ -700,7 +711,7 @@ debug(pw_opt_ct, Val{6}, 10) |> prettify
 $n=7$
 
 ```{julia}
-debug(pw_opt_ct, Val{7}, 10) |> prettify
+debug(pw_opt_ct, Val{7}, 10) |> cleanup
 ```
 
 :::
@@ -785,7 +796,7 @@ end
 ```{julia}
 #| output: false
 @ct_enable function horner_ct(@ct(a), x)
-    @ct(n = length(a))
+    @ct n = length(a)
     y = @ct(a[n])
 
     @ct_ctrl for k in n-1:-1:1
@@ -813,7 +824,7 @@ horner_ct(Val{t}, 10)
 ## Схема Горнера: результат генерации
 
 ```{julia}
-debug(horner_ct, Val{t}, 10) |> prettify
+debug(horner_ct, Val{t}, 10) |> cleanup
 ```
 
 - Цикл - развёрнут.
