@@ -51,12 +51,6 @@ jupyter: julia-1.10
 
 В примерах программ используются несколько пакетов:
 
-<!-- 
-```{julia}
-using CompTime, InteractiveUtils, MacroTools
-```
- -->
-
 ```{julia}
 using CompTime, InteractiveUtils
 ```
@@ -619,7 +613,7 @@ debug(pw_ct, Val{3}, 10) |> cleanup
         end
     end
 
-    @ct_ctrl if r_one return @ct one(T) else return r end
+    return @ct_ctrl if r_one @ct one(T) else r end
 end
 ```
 
