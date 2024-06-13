@@ -1,0 +1,476 @@
+---
+title: "Julia: частичные вычисления + абстракная интерпретация --> оптимизация"
+author: "Сергей Анатольевич Романенко"
+institute: "Институт им. М.В.Келдыша РАН"
+date: today
+title-slide-attributes: 
+  data-background-color: "beige"
+format:
+  revealjs:
+    theme:
+      - default
+      - julia_pe_abs_slides.scss
+    from: markdown+emoji
+    lang: ru-RU
+    code-fold: false
+    code-line-numbers: false
+    code-block-height: 600px
+    slide-number: true
+    # smaller: true
+    embed-resources: false
+    # chalkboard: true
+execute: 
+  echo: true
+jupyter: julia-1.10
+---
+
+# Julia: специализация/генерация программ без метапрограммирования
+
+## Что значит - "метапрограммирование"?
+
+- В случае Джулии имеется два средства метапрограммирования:
+  ***макросы*** и ***генерируемые функции*** (generated functions).
+- Макросы работают на раннем этапе компиляции программы, и имеют
+  информацию только о ***внешней форме*** фрагментов программы (о
+  синтаксисе). Поэтому - годятся только для замены одних конструкций на
+  дургие, им эквивалентные.
+- Генерируемые функции работают в тот момент, когда известны ***типы***
+  для всех аргументов вызова функции. Поэтому, можно генерировать
+  разное, в зависимости от типов.
+- Можно сделать над генерирующими функциями ***надстройку*** (с помощью
+  макросов), и писать "стадированные" программы, в стиле MetaOCaml.
+  Пример - пакет `CompTime`.
+
+::: {.callout-note appearance="minimal"}
+Но можно стадировать программы на Джулии и без метапрограммирования!
+:::
+
+## В Джулию встроена специализация программ по типам аргументов 
+
+```{julia}
+#| output: false
+sq(x) = x * x
+```
+
+Вызываем с аргументами разных типов:
+
+```{julia}
+sq(3), sq(3.0), sq("Abc")
+```
+
+В момент вызова под каждую встретившуюся комбинацию типов аргументов
+создаётся отдельная версия функции! (No metaprogramming...)
+
+```{julia}
+@code_typed sq(3)
+```
+
+```{julia}
+@code_typed sq(3.0)
+```
+
+## Но возможна и специализация по значениям
+
+Константу `n` можно "обернуть" в значение `Val{n}()`, имеющее тип
+`Val{n}`.
+
+```{julia}
+#| output: false
+foo(::Val{0}, x) = one(x)
+foo(::Val{1}, x) = x
+foo(::Val{2}, x) = x * x
+```
+
+Конструктор `Val(n)` порождает значение `Val{n}()`.
+
+```{julia}
+Tuple(foo(Val(i), "Abc") for i in 0:2)
+```
+
+::: {.hidden}
+```{julia}
+using InteractiveUtils
+```
+:::
+
+И вот - генерируется специализарованный вариант функции:
+
+```{julia}
+@code_typed foo(Val(2), 10)
+```
+
+# Специализация рекурсивных программ
+
+## "Дежурное блюдо" - возведение в степень
+
+```{julia}
+#| output: false
+function pw_rec(n, x::T) where {T}
+    if iszero(n)
+        one(T)
+    elseif isodd(n)
+        pw_rec(n - 1, x) * x
+    else
+        pw_rec(n ÷ 2, x * x)
+    end
+end
+```
+
+```{julia}
+Tuple(pw_rec(n, "Abc") for n in 0:5)
+```
+
+## Обёртываем `n` в тип
+
+```{julia}
+#| output: false
+function pw_rec_pe(::Val{n}, x::T) where {n,T}
+    if iszero(n)
+        one(T)
+    elseif isodd(n)
+        pw_rec_pe(Val(n - 1), x) * x
+    else
+        pw_rec_pe(Val(n ÷ 2), x * x)
+    end
+end
+```
+
+```{julia}
+Tuple(pw_rec_pe(Val(n), "Abc") for n in 0:5)
+```
+
+## Результаты специализации
+
+Лишние умножения на `one(T)`!
+
+::: {.panel-tabset}
+
+### 0
+
+$n=0$
+
+```{julia}
+@code_typed pw_rec_pe(Val(0), 10)
+```
+
+### 1
+
+$n=1$
+
+```{julia}
+@code_typed pw_rec_pe(Val(1), 10)
+```
+
+### 2
+
+$n=2$
+
+```{julia}
+@code_typed pw_rec_pe(Val(2), 10)
+```
+
+### 3
+
+$n=3$
+
+```{julia}
+@code_typed pw_rec_pe(Val(3), 10)
+```
+
+### 4
+
+$n=4$
+
+```{julia}
+@code_typed pw_rec_pe(Val(4), 10)
+```
+
+### 5
+
+$n=5$
+
+```{julia}
+@code_typed pw_rec_pe(Val(5), 10)
+```
+
+:::
+
+# Оптимизации с помощью "абстрактной интерпретации"
+
+## Что такое "абстрактная интерпретация"?
+
+- Если есть некое "конкретное" значение `v`, то это `v` содержит полную
+  информацию о самом себе.
+- Абстрагируясь от части информации о `v` получаем "абстрактное"
+  значение `a`, которое что-то говорит о `v`, но, может быть, - не всё.
+- Например, абстрактное значение `"является нечётным"` кое-что сообщает
+  о конкретнои значении `25`, но сообщает не всё.
+- ***Конкретное*** значение переменной может быть неизвестно во время
+  специализации программы, но может быть известно некое
+  ***абстрактное*** значение, которое даёт полезную информацию,
+  позволяющее что-то соптимизировать.
+
+**Пример.** выражение `r * x` можно заменить на выражение `x`, если
+известно, что `r` - это `one(T)`.
+
+## Переход к хвостовой рекурсии
+
+```{julia}
+#| output: false
+function pw_tail(n, r, x)
+    if iszero(n)
+        r
+    elseif isodd(n)
+        pw_tail(n - 1, r * x, x)
+    else
+        pw_tail(n ÷ 2, r, x * x)
+    end
+end
+
+pw_tail(n, x::T) where {T} = pw_tail(n, one(T), x)
+```
+
+Проверяем:
+
+```{julia}
+Tuple(pw_tail(n, "Abc") for n in 0:5)
+```
+
+Теперь результат работы функции "находится у нас в руках" (в виде переменной `r`), и можно отслеживать, равен ли он `one(T)`?
+
+## Добавление "абстрактных" вычислений
+
+```{julia}
+#| output: false
+function pw_tail_abs(n, r_one, r, x)
+    if iszero(n)
+        r
+    elseif isodd(n)
+        pw_tail_abs(n - 1, false, (r_one ? x : r * x), x)
+    else
+        pw_tail_abs(n ÷ 2, r_one, r, x * x)
+    end
+end
+
+pw_tail_abs(n, x::T) where {T} =
+    pw_tail_abs(n, true, one(T), x)
+```
+
+Проверяем:
+
+```{julia}
+Tuple(pw_tail_abs(n, "Abc") for n in 0:5)
+```
+
+Блестяще! Теперь программа не делает лишних умножений на `one(T)`.
+Однако, это "экономически невыгодно", ибо умножение стоит дешевле, чем
+затраты на манипуляции с `r_one`! (Разве что, `r` и `x` - это что-то
+уж "очень жирное", вроде матриц.)
+
+## Перемещение "абстрактных" вычислений на этап специализации
+
+```{julia}
+#| output: false
+function pw_tail_pe_opt(::Val{n}, ::Val{r_one}, r, x) where {n,r_one}
+    if iszero(n)
+        r
+    elseif isodd(n)
+        pw_tail_pe_opt(Val(n - 1), Val(false), (r_one ? x : r * x), x)
+    else
+        pw_tail_pe_opt(Val(n ÷ 2), Val(r_one), r, x * x)
+    end
+end
+
+pw_tail_pe_opt(::Val{n}, x::T) where {n,T} =
+    pw_tail_pe_opt(Val(n), Val(true), one(T), x)
+```
+
+Проверяем:
+
+```{julia}
+Tuple(pw_tail_pe_opt(Val(n), "Abc") for n in 0:5)
+```
+
+Ну вот! Теперь лишние вычисления не страшны, поскольку они делаются
+**только один раз**, во время частичных вычислений!
+
+## Польза от абстрактной интерпретации
+
+Умножений на `one(T)` больше нет!
+
+::: {.panel-tabset}
+
+### 0
+
+$n=0$
+
+```{julia}
+@code_typed pw_tail_pe_opt(Val(0), 10)
+```
+
+### 1
+
+$n=1$
+
+```{julia}
+@code_typed pw_tail_pe_opt(Val(1), 10)
+```
+
+### 2
+
+$n=2$
+
+```{julia}
+@code_typed pw_tail_pe_opt(Val(2), 10)
+```
+
+### 3
+
+$n=3$
+
+```{julia}
+@code_typed pw_tail_pe_opt(Val(3), 10)
+```
+
+### 4
+
+$n=4$
+
+```{julia}
+@code_typed pw_tail_pe_opt(Val(4), 10)
+```
+
+### 5
+
+$n=5$
+
+```{julia}
+@code_typed pw_tail_pe_opt(Val(5), 10)
+```
+
+:::
+
+# Можно и без хвостовой рекурсии!
+
+## "Абстрактные" значения могут быть возвращаемым результатом функции
+
+```{julia}
+#| output: false
+function pw_rec_abs(n, x::T) where {T}
+    if iszero(n)
+        (true, one(T))
+    elseif isodd(n)
+        (r_one, r) = pw_rec_abs(n - 1, x)
+        (false, (r_one ? x : r * x))
+    else
+        pw_rec_abs(n ÷ 2, x * x)
+    end
+end
+
+pw_rec_opt(n, x::T) where {T} = pw_rec_abs(n, x)[2]
+```
+
+Проверяем:
+
+```{julia}
+Tuple(pw_rec_opt(n, "Abc") for n in 0:5)
+```
+
+
+## Перемещение "абстрактных" вычислений на этап специализации
+
+```{julia}
+#| output: false
+mult_opt(::Val{true}, r, x) = x
+mult_opt(::Val{false}, r, x) = r * x
+
+function pw_rec_pe_abs(::Val{n}, x::T) where {n,T}
+    if iszero(n)
+        (Val(true), one(T))
+    elseif isodd(n)
+        (r_one, r) = pw_rec_pe_abs(Val(n - 1), x)
+        (Val(false), mult_opt(r_one, r, x))
+    else
+        pw_rec_pe_abs(Val(n ÷ 2), x * x)
+    end
+end
+
+pw_rec_pe_opt(::Val{n}, x::T) where {n,T} = pw_rec_pe_abs(Val(n), x)[2]
+```
+
+Проверяем:
+
+```{julia}
+Tuple(pw_rec_pe_opt(Val(n), "Abc") for n in 0:5)
+```
+
+## Польза от абстрактной интерпретации
+
+Умножений на `one(T)` больше нет!
+
+::: {.panel-tabset}
+
+### 0
+
+$n=0$
+
+```{julia}
+@code_typed pw_rec_pe_opt(Val(0), 10)
+```
+
+### 1
+
+$n=1$
+
+```{julia}
+@code_typed pw_rec_pe_opt(Val(1), 10)
+```
+
+### 2
+
+$n=2$
+
+```{julia}
+@code_typed pw_rec_pe_opt(Val(2), 10)
+```
+
+### 3
+
+$n=3$
+
+```{julia}
+@code_typed pw_rec_pe_opt(Val(3), 10)
+```
+
+### 4
+
+$n=4$
+
+```{julia}
+@code_typed pw_rec_pe_opt(Val(4), 10)
+```
+
+### 5
+
+$n=5$
+
+```{julia}
+@code_typed pw_rec_pe_opt(Val(5), 10)
+```
+
+:::
+
+# Мудрые умозаключения
+
+## Выводы
+
+- "Абстрактные" вычисления - это вычисление некоторых фактов о
+  конкретных значениях. (Или, шире, - об отношениях между значениями.
+  Например: $x ≠ y$.)
+- Факты можно использовать для оптимизации вычислений.
+- Если не использовать специализацию программы, то затраты на работу с
+  фактами могут превышать экономию, достигаемую за счёт использоания
+  фактов.
+- Если факты кодировать типами, то вычисления над ними можно переместить
+  не время компиляции программы, и тогда их использование становится
+  выгодным. (Вычисляем факт один раз, а используем его - много раз.)
