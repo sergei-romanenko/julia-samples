@@ -1,0 +1,305 @@
+---
+title: "Julia: генерация программ с `goto`"
+author: "Сергей Анатольевич Романенко"
+institute: "Институт им. М.В.Келдыша РАН"
+date: today
+title-slide-attributes: 
+  data-background-color: "beige"
+format:
+  revealjs:
+    theme:
+      - default
+      - dfa_gen_slides.scss
+    from: markdown+emoji
+    lang: ru-RU
+    code-fold: false
+    code-line-numbers: false
+    code-block-height: 600px
+    slide-number: true
+    # smaller: true
+    embed-resources: false
+    # chalkboard: true
+execute: 
+  echo: true
+jupyter: julia-1.10
+---
+
+# Пререквизиты
+
+## Вспомогательные средства
+
+Подключаем `CompTime`, чтобы провести эксперимент по его использованию
+(неудачный).
+
+```{julia}
+using CompTime
+```
+
+Поключаем функцию `cleanup`, для подчистки сгенерированных программ,
+которая делает следующее:
+
+- Удаляет информацию о номерах строк исходной программы.
+- Удаляет константные выражения (неиспользуемые).
+- Удаляет лишние `begin ... end`.
+
+```{julia}
+include("MacroUtils.jl")
+using .MacroUtils: cleanup
+```
+
+# Пример: детерминированный конечный автомат
+
+## Автомат проверки чётности
+
+- На вход поступает последовательность из символов `0` и `1`.
+- На выходе получается последовательности из символов `even` и `odd`.
+- На каждом шаге читается один входной символ и пишется один выходной.
+
+:::{.r-stack}
+
+```{mermaid}
+%%| echo: false
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px'}}}%%
+flowchart TD
+
+State0(("&nbsp;s0&nbsp;"))
+State1(("&nbsp;s1&nbsp;"))
+
+State0 ---> |0 / even| State0
+State0 ---> |1 / odd| State1
+
+State1 ---> |0 / odd| State1
+State1 ---> |1 / even| State0
+```
+
+:::
+
+- Если уже прочитанная последовательность содержит ***четное***
+  количество символов `1`, на выход пишется `even`.
+- Если уже прочитанная последовательность содержит ***нечетное***
+  количество символов `1`, на выход пишется `even`.
+
+
+## Реализация без `goto`
+
+```{julia}
+#| output: false
+function dfa_parity(xs)
+    ys = ()
+    state = :s0
+    for x in xs
+        if state == :s0
+            x == 0 && (ys = (ys..., :even); state = :s0; continue)
+            x == 1 && (ys = (ys..., :odd); state = :s1; continue)
+            error("Unexpected input: ", x)
+        elseif state == :s1
+            x == 0 && (ys = (ys..., :odd); state = :s1; continue)
+            x == 1 && (ys = (ys..., :even); state = :s0; continue)
+            error("Unexpected input: ", x)
+        end
+    end
+    return ys
+end
+```
+
+Проверяем:
+
+```{julia}
+dfa_parity((0, 1, 0, 1, 0))
+```
+
+Очевидная неэффективность - манипуляции с переменной `state`!
+
+## Реализация с `@label` и `@goto`
+
+```{julia}
+#| output: false
+function dfa_parity_goto(xs)
+    ys = ()
+    xs_it = iterate(xs)
+    @goto s0
+
+    @label s0
+    xs_it !== nothing || return ys
+    x, xs_state = xs_it
+    xs_it = iterate(xs, xs_state)
+    x == 0 && (ys = (ys..., :even); @goto s0)
+    x == 1 && (ys = (ys..., :odd); @goto s1)
+    error("Unexpected input: ", x)
+
+    @label s1
+    xs_it !== nothing || return ys
+    x, xs_state = xs_it
+    xs_it = iterate(xs, xs_state)
+    x == 0 && (ys = (ys..., :odd); @goto s1)
+    x == 1 && (ys = (ys..., :even); @goto s0)
+    error("Unexpected input: ", x)
+end
+```
+
+
+<!-- 
+```{julia .hidden}
+dfa_parity_goto((0, 1, 0, 1, 0))
+```
+ -->
+<!-- 
+```{julia}
+# @code_lowered dfa_parity_goto((0, 1, 0, 1, 0))
+```
+ -->
+
+## Реализация с `@label` и `@goto` (замечания)
+
+- В случае ручного программирования, использование `@label` и `@goto` --
+  дурной стиль и источник ошибок.
+- Если программа генерируется автоматически, хороший стиль не так важен,
+  ибо:
+  - Эту программу (почти) никто читать не будет.
+  - Описки не возникают, поскольку программа не пишется вручную.
+- Можно заменить `goto` на хвостовую рекурсию. В этом случае:
+    - Каждому состоянию автомата соответствует отдельная функция.
+    - Однако, если реализация языка не умеет эффективно реализовывать
+      хвостовую рекурсию, то получится переполнение стека.
+    - Но даже если хвостовая рекурсия реализована хорошо, всё равно
+      получается "стрельба из пушки по воробьям". И в конце -- всё равно
+      появляются `goto`.
+
+# Интерпретатор конечных автоматов
+
+## Кодирование автомата таблицей
+
+Будем кодировать конечный автомат в виде таблицы.
+
+```{julia}
+#| output: false
+parity_table =
+    (:s0, (
+        (0, (:s0, :even)),
+        (1, (:s1, :odd)))),
+    (:s1, (
+        (0, (:s1, :odd)),
+        (1, (:s0, :even))))
+```
+
+- Состояния обозначаются символами (в смысле Джулии).
+- На верхнем уровне перечислены возможные состояния.
+- Для каждого состояния перечислены возможные входные символы.
+- Для каждого входного символа указано:
+  - в какое состояние нужно перейти и
+  - какой символ послать на выход.
+
+## Генерация автомата из таблицы
+
+```{julia}
+#| output: false
+function dfa_gen_impl(::Val{tbl}, ::Val{start}, xs) where {tbl,start}
+    body = Expr[]
+
+    for (s, tbl_s) in tbl
+        push!(body, :(@label $s))
+        push!(body, :(xs_it !== nothing || return ys))
+        push!(body, :((x, xs_state) = xs_it))
+        push!(body, :(xs_it = iterate(xs, xs_state)))
+        for (x0, (ns, r)) in tbl_s
+            push!(body, :(x == $x0 && (ys = (ys..., $(Meta.quot(r))); @goto $ns)))
+        end
+        push!(body, :(error("Unexpected input: ", x)))
+    end
+
+    quote
+        ys = ()
+        xs_it = iterate(xs)
+        @goto $start
+        $(body...)
+    end
+end
+```
+
+## Результат генерации программы из таблицы
+
+```{julia}
+dfa_gen_impl(Val(parity_table), Val(:s0), (0, 1, 0, 1, 0)) |> cleanup
+```
+
+ (:arrow_up:  Не забываем прокрутить.)
+
+Получилась такая же (с точностью до форматирования) программа, как и та,
+что ранее была написана вручную.
+
+## Обёртываем генератор в `@generated function`
+
+```{julia}
+#| output: false
+@generated function dfa_gen(::Val{tbl}, ::Val{state}, xs) where {tbl,state}
+    dfa_gen_impl(Val(tbl), Val(state), xs)
+end
+```
+
+Проверяем:
+
+```{julia}
+dfa_gen(Val(parity_table), Val(:s0), (0, 1, 0, 1, 0))
+```
+
+# Попытка использовать пакет `CompTime`
+
+## Добавление аннотаций к `dfa_gen`
+
+Переписываем `dfa_gen`, вставляя `@ct...`.
+
+```julia
+@ct_enable function dfa_gen_ct(@ct(tbl), @ct(start), xs)
+    ys = ()
+    xs_it = iterate(xs)
+    @goto @ct(start)
+
+    @ct_ctrl for (s, tbl_s) in tbl
+        @label @ct(s)
+        xs_it !== nothing || return ys
+        (x, xs_state) = xs_it
+        xs_it = iterate(xs, xs_state)
+        @ct_ctrl for (x0, (ns, r)) in tbl_s
+            x == @ct(x0) && (ys = (ys..., @ct(r)); @goto @ct(ns))
+        end
+        error("Unexpected input: ", x)
+    end
+end
+```
+
+- `@label @ct( )` и `@goto @ct( )` не работают как надо!
+- Не получается превращать состояния в метки: `:s0` в `s0`.
+
+<!-- 
+```{julia}
+# debug(dfa_gen_ct, Val{parity_table}, Val{:s0}, (0, 1, 0, 1, 0)) |> cleanup
+```
+
+
+```{julia}
+# dfa_gen_ct(Val{parity_table}, Val{:s0}, (0, 1, 0, 1, 0))
+```
+ -->
+
+## Почему не получилось использовать `CompTime`
+
+Видимо, есть принципиальные затруднения.
+
+- Идея `CompTime` (и, вообще, стадированного программирования) состоит в
+  том, что программу можно использовать двумя способами: напрямую (без
+  генерации) и в две стадии (генерация и исполнение сгенерированной
+  программы).
+- После стирания аннотаций должна получаться "обыкновенная" программы,
+  которую можно исполнить "обыкновенным" способом.
+- В случае `dfa_gen_ct`, стерев аннотации `@ct...`, мы не получаем
+  корректную программу! В `@label l` и `@goto l`, метка `l` должна быть
+  константой, которая известна статически. Но, после стирания аннотаций,
+  получаются конструкции `@label s` и `@goto ns`, в которых `s` и `ns`
+  -- не константы, а переменные.
+
+# Мудрые умозаключения
+
+- Если писать генераторы вручную, то можно делать кое-какие вещи,
+  который не получаются с помощью частичных вычислений или стадирования.
+- Нужно подумать, может ли помочь в таких случаях суперкомпиляция.
+  (Может быть - и нет...)
