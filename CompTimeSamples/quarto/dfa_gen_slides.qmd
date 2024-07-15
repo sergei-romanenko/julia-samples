@@ -14,7 +14,7 @@ format:
     lang: ru-RU
     code-fold: false
     code-line-numbers: false
-    code-block-height: 600px
+    code-block-height: 610px
     slide-number: true
     # smaller: true
     embed-resources: false
@@ -175,11 +175,11 @@ dfa_parity_goto((0, 1, 0, 1, 0))
 #| output: false
 parity_table =
     (:s0, (
-        (0, (:s0, :even)),
-        (1, (:s1, :odd)))),
+        (0, :s0, :even),
+        (1, :s1, :odd))),
     (:s1, (
-        (0, (:s1, :odd)),
-        (1, (:s0, :even))))
+        (0, :s1, :odd),
+        (1, :s0, :even)))
 ```
 
 - Состояния обозначаются символами (в смысле Джулии).
@@ -196,24 +196,22 @@ parity_table =
 function dfa_gen_impl(tbl, start)
     body = Expr[]
 
-    for (s, tbl_s) in tbl
+    for (s, r) in tbl
         push!(body, quote
             @label $s
             xs_it !== nothing || return ys
-            (x, xs_state) = xs_it
-            xs_it = iterate(xs, xs_state)
+            (x, xs_state) = xs_it; xs_it = iterate(xs, xs_state)
         end)
 
-        for (x0, (ns, r)) in tbl_s
+        for (x0, g, w) in r
             push!(body, :(
-                x == $x0 && (ys = (ys..., $(Meta.quot(r))); @goto $ns)))
+                x == $x0 && (ys = (ys..., $(Meta.quot(w))); @goto $g)))
         end
         push!(body, :(error("Unexpected input: ", x)))
     end
 
     quote
-        ys = ()
-        xs_it = iterate(xs)
+        ys = (); xs_it = iterate(xs)
         @goto $start
         $(body...)
     end
@@ -235,10 +233,14 @@ dfa_gen_impl(parity_table, :s0) |> cleanup
 
 ```{julia}
 #| output: false
-@generated function dfa_gen(::Val{tbl}, ::Val{state}, xs) where {tbl,state}
-    dfa_gen_impl(tbl, state)
+@generated function dfa_gen(::Val{tbl}, ::Val{start}, xs) where {tbl,start}
+    dfa_gen_impl(tbl, start)
 end
 ```
+
+- Параметр `xs` используется в `dfa_gen_impl` только "символически",
+  внутри "кавычек", а его тип - не использется. Поэтому, `xs` не
+  передаётся в `dfa_gen_impl` в качестве параметра.
 
 Проверяем:
 
@@ -258,13 +260,13 @@ dfa_gen(Val(parity_table), Val(:s0), (0, 1, 0, 1, 0))
     xs_it = iterate(xs)
     @goto @ct(start)
 
-    @ct_ctrl for (s, tbl_s) in tbl
+    @ct_ctrl for (s, r) in tbl
         @label @ct(s)
         xs_it !== nothing || return ys
         (x, xs_state) = xs_it
         xs_it = iterate(xs, xs_state)
-        @ct_ctrl for (x0, (ns, r)) in tbl_s
-            x == @ct(x0) && (ys = (ys..., @ct(r)); @goto @ct(ns))
+        @ct_ctrl for (x0, g, w) in r
+            x == @ct(x0) && (ys = (ys..., @ct(w)); @goto @ct(g))
         end
         error("Unexpected input: ", x)
     end
