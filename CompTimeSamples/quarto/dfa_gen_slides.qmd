@@ -193,16 +193,20 @@ parity_table =
 
 ```{julia}
 #| output: false
-function dfa_gen_impl(::Val{tbl}, ::Val{start}, xs) where {tbl,start}
+function dfa_gen_impl(tbl, start)
     body = Expr[]
 
     for (s, tbl_s) in tbl
-        push!(body, :(@label $s))
-        push!(body, :(xs_it !== nothing || return ys))
-        push!(body, :((x, xs_state) = xs_it))
-        push!(body, :(xs_it = iterate(xs, xs_state)))
+        push!(body, quote
+            @label $s
+            xs_it !== nothing || return ys
+            (x, xs_state) = xs_it
+            xs_it = iterate(xs, xs_state)
+        end)
+
         for (x0, (ns, r)) in tbl_s
-            push!(body, :(x == $x0 && (ys = (ys..., $(Meta.quot(r))); @goto $ns)))
+            push!(body, :(
+                x == $x0 && (ys = (ys..., $(Meta.quot(r))); @goto $ns)))
         end
         push!(body, :(error("Unexpected input: ", x)))
     end
@@ -219,7 +223,7 @@ end
 ## Результат генерации программы из таблицы
 
 ```{julia}
-dfa_gen_impl(Val(parity_table), Val(:s0), (0, 1, 0, 1, 0)) |> cleanup
+dfa_gen_impl(parity_table, :s0) |> cleanup
 ```
 
  (:arrow_up:  Не забываем прокрутить.)
@@ -232,7 +236,7 @@ dfa_gen_impl(Val(parity_table), Val(:s0), (0, 1, 0, 1, 0)) |> cleanup
 ```{julia}
 #| output: false
 @generated function dfa_gen(::Val{tbl}, ::Val{state}, xs) where {tbl,state}
-    dfa_gen_impl(Val(tbl), Val(state), xs)
+    dfa_gen_impl(tbl, state)
 end
 ```
 
