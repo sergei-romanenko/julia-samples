@@ -1,30 +1,3 @@
-
-// ---
-// title: "Julia: генерация программ с `goto`"
-// author: "Сергей Анатольевич Романенко"
-// institute: "Институт им. М.В.Келдыша РАН"
-// date: today
-// title-slide-attributes:
-//   data-background-color: "beige"
-// format:
-//   revealjs:
-//     theme:
-//       - default
-//       - dfa_gen_slides.scss
-//     from: markdown+emoji
-//     lang: ru-RU
-//     code-fold: false
-//     code-line-numbers: false
-//     code-block-height: 610px
-//     slide-number: true
-//     # smaller: true
-//     embed-resources: false
-//     # chalkboard: true
-// execute:
-//   echo: true
-// jupyter: julia-1.10
-// ---
-
 #import "@preview/touying:0.5.5": *
 #import themes.simple: *
 #import "@preview/fletcher:0.5.3" as fletcher: diagram, node, edge
@@ -34,8 +7,7 @@
   // footer: [Simple slides],
 )
 
-#set text(size: 21pt, font: "Open Sans", style: "italic")
-// #set text(size: 21pt, font: "FreeSans")
+#set text(size: 21pt, font: "FreeSans")
 
 #let show-jl(font-size: 0.75em, body) = {
   rect(
@@ -69,9 +41,17 @@
   show-jl-output(it)
 }
 
+#set document(
+  title: "Julia: генерация программ с goto",
+  author: "Сергей Анатольевич Романенко",
+  date: datetime(year: 2024, month: 7, day: 14),
+)
+
 #title-slide[
   #v(6fr)
-  = Julia: генерация программ\ с `goto`
+  = #text(font: "Comic Sans MS", style: "italic")[
+    Julia: генерация программ\ с `goto`
+  ]
 
   #v(3fr)
   *Сергей Анатольевич Романенко*
@@ -111,20 +91,23 @@ using .MacroUtils: cleanup
 - На выходе получается последовательности из символов `even` и `odd`.
 - На каждом шаге читается один входной символ и пишется один выходной.
 
-#diagram(
-  node-shape: "circle",
-  node-stroke: 1pt,
-  // label-side: center,
-  spacing: (5em, 2.2em),
-  {
-    node((-1, 0), `s0`, name: <s0>)
-    node((+1, 0), `s1`, name: <s1>)
-    edge(<s0.north>, <s0.west>, "-|>", [`0/even`], bend: -152deg, label-side: center)
-    edge(<s0.north>, <s1.north>, "-|>", [`1/odd`], bend: 30deg, label-side: center)
-    edge(<s1.south>, <s1.east>, "-|>", [`0/odd`], bend: -152deg, label-side: center)
-    edge(<s1.south>, <s0.south>, "-|>", [`1/even`], bend: 30deg, label-side: center)
-  },
-)
+#align(center)[
+  #diagram(
+    node-shape: "circle",
+    node-stroke: 1pt,
+    // label-side: center,
+    spacing: (5em, 2.2em),
+    {
+      node((-1, 0), `s0`, name: <s0>)
+      node((+1, 0), `s1`, name: <s1>)
+      edge(<s0.north>, <s0.west>, "-|>", [`0/even`], bend: -152deg, label-side: center)
+      edge(<s0.north>, <s1.north>, "-|>", [`1/odd`], bend: 30deg, label-side: center)
+      edge(<s1.south>, <s1.east>, "-|>", [`0/odd`], bend: -152deg, label-side: center)
+      edge(<s1.south>, <s0.south>, "-|>", [`1/even`], bend: 30deg, label-side: center)
+    },
+  )
+]
+
 
 - Если уже прочитанная последовательность содержит *_четное_*
   количество символов `1`, на выход пишется `even`.
