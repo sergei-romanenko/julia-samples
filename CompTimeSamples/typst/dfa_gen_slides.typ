@@ -1,37 +1,94 @@
----
-title: "Julia: генерация программ с `goto`"
-author: "Сергей Анатольевич Романенко"
-institute: "Институт им. М.В.Келдыша РАН"
-date: today
-title-slide-attributes: 
-  data-background-color: "beige"
-format:
-  revealjs:
-    theme:
-      - default
-      - dfa_gen_slides.scss
-    from: markdown+emoji
-    lang: ru-RU
-    code-fold: false
-    code-line-numbers: false
-    code-block-height: 610px
-    slide-number: true
-    # smaller: true
-    embed-resources: false
-    # chalkboard: true
-execute: 
-  echo: true
-engine: julia
----
 
-# Пререквизиты
+// ---
+// title: "Julia: генерация программ с `goto`"
+// author: "Сергей Анатольевич Романенко"
+// institute: "Институт им. М.В.Келдыша РАН"
+// date: today
+// title-slide-attributes:
+//   data-background-color: "beige"
+// format:
+//   revealjs:
+//     theme:
+//       - default
+//       - dfa_gen_slides.scss
+//     from: markdown+emoji
+//     lang: ru-RU
+//     code-fold: false
+//     code-line-numbers: false
+//     code-block-height: 610px
+//     slide-number: true
+//     # smaller: true
+//     embed-resources: false
+//     # chalkboard: true
+// execute:
+//   echo: true
+// jupyter: julia-1.10
+// ---
 
-## Вспомогательные средства
+#import "@preview/touying:0.5.5": *
+#import themes.simple: *
+#import "@preview/fletcher:0.5.3" as fletcher: diagram, node, edge
+
+#show: simple-theme.with(
+  aspect-ratio: "4-3",
+  // footer: [Simple slides],
+)
+
+#set text(size: 21pt, font: "Open Sans", style: "italic")
+// #set text(size: 21pt, font: "FreeSans")
+
+#let show-jl(font-size: 0.75em, body) = {
+  rect(
+    width: 100%,
+    stroke: 1pt,
+    fill: luma(98%),
+  )[
+    #set text(size: font-size)
+    #box(body)
+  ]
+}
+
+#show raw.where(lang: "julia"): it => {
+  show-jl(it)
+}
+
+#let show-jl-output(font-size: 0.75em, body) = {
+  block(
+    above: -0.5em,
+    width: 100%,
+    breakable: true,
+  )
+  [
+    #set text(size: font-size)
+    #h(0.4em)
+    #box(body)
+  ]
+}
+
+#show raw.where(lang: "julia-output"): it => {
+  show-jl-output(it)
+}
+
+#title-slide[
+  #v(6fr)
+  = Julia: генерация программ\ с `goto`
+
+  #v(3fr)
+  *Сергей Анатольевич Романенко*
+  #v(5fr)
+  Институт им. М.В.Келдыша РАН
+  #v(1fr)
+  Москва, 14 июля 2024
+]
+
+= Пререквизиты
+
+== Вспомогательные средства
 
 Подключаем `CompTime`, чтобы провести эксперимент по его использованию
 (неудачный).
 
-```{julia}
+```julia
 using CompTime
 ```
 
@@ -42,48 +99,41 @@ using CompTime
 - Удаляет константные выражения (неиспользуемые).
 - Удаляет лишние `begin ... end`.
 
-```{julia}
+```julia
 include("MacroUtils.jl")
 using .MacroUtils: cleanup
 ```
+= Пример: детерминированный конечный автомат
 
-# Пример: детерминированный конечный автомат
-
-## Автомат проверки чётности
+== Автомат проверки чётности
 
 - На вход поступает последовательность из символов `0` и `1`.
 - На выходе получается последовательности из символов `even` и `odd`.
 - На каждом шаге читается один входной символ и пишется один выходной.
 
-:::{.r-stack}
+#diagram(
+  node-shape: "circle",
+  node-stroke: 1pt,
+  // label-side: center,
+  spacing: (5em, 2.2em),
+  {
+    node((-1, 0), `s0`, name: <s0>)
+    node((+1, 0), `s1`, name: <s1>)
+    edge(<s0.north>, <s0.west>, "-|>", [`0/even`], bend: -152deg, label-side: center)
+    edge(<s0.north>, <s1.north>, "-|>", [`1/odd`], bend: 30deg, label-side: center)
+    edge(<s1.south>, <s1.east>, "-|>", [`0/odd`], bend: -152deg, label-side: center)
+    edge(<s1.south>, <s0.south>, "-|>", [`1/even`], bend: 30deg, label-side: center)
+  },
+)
 
-```{mermaid}
-%%| echo: false
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px'}}}%%
-flowchart TD
-
-State0(("&nbsp;s0&nbsp;"))
-State1(("&nbsp;s1&nbsp;"))
-
-State0 ---> |0 / even| State0
-State0 ---> |1 / odd| State1
-
-State1 ---> |0 / odd| State1
-State1 ---> |1 / even| State0
-```
-
-:::
-
-- Если уже прочитанная последовательность содержит ***четное***
+- Если уже прочитанная последовательность содержит *_четное_*
   количество символов `1`, на выход пишется `even`.
-- Если уже прочитанная последовательность содержит ***нечетное***
+- Если уже прочитанная последовательность содержит *_нечетное_*
   количество символов `1`, на выход пишется `even`.
 
+== Реализация без `goto`
 
-## Реализация без `goto`
-
-```{julia}
-#| output: false
+```julia
 function dfa_parity(xs)
     ys = ()
     state = :s0
@@ -104,16 +154,19 @@ end
 
 Проверяем:
 
-```{julia}
+```julia
 dfa_parity((0, 1, 0, 1, 0))
+```
+
+```julia-output
+(:even, :odd, :odd, :even, :even)
 ```
 
 Очевидная неэффективность - манипуляции с переменной `state`!
 
-## Реализация с `@label` и `@goto`
+== Реализация с `@label` и `@goto`
 
-```{julia}
-#| output: false
+```julia
 function dfa_parity_goto(xs)
     ys = ()
     xs_it = iterate(xs)
@@ -137,19 +190,7 @@ function dfa_parity_goto(xs)
 end
 ```
 
-
-<!-- 
-```{julia .hidden}
-dfa_parity_goto((0, 1, 0, 1, 0))
-```
- -->
-<!-- 
-```{julia}
-# @code_lowered dfa_parity_goto((0, 1, 0, 1, 0))
-```
- -->
-
-## Реализация с `@label` и `@goto` (замечания)
+== Реализация с `@label` и `@goto` (замечания)
 
 - В случае ручного программирования, использование `@label` и `@goto` --
   дурной стиль и источник ошибок.
@@ -158,21 +199,20 @@ dfa_parity_goto((0, 1, 0, 1, 0))
   - Эту программу (почти) никто читать не будет.
   - Описки не возникают, поскольку программа не пишется вручную.
 - Можно заменить `goto` на хвостовую рекурсию. В этом случае:
-    - Каждому состоянию автомата соответствует отдельная функция.
-    - Однако, если реализация языка не умеет эффективно реализовывать
-      хвостовую рекурсию, то получится переполнение стека.
-    - Но даже если хвостовая рекурсия реализована хорошо, всё равно
-      получается "стрельба из пушки по воробьям". И в конце -- всё равно
-      появляются `goto`.
+  - Каждому состоянию автомата соответствует отдельная функция.
+  - Однако, если реализация языка не умеет эффективно реализовывать
+    хвостовую рекурсию, то получится переполнение стека.
+  - Но даже если хвостовая рекурсия реализована хорошо, всё равно
+    получается "стрельба из пушки по воробьям". И в конце -- всё равно
+    появляются `goto`.
 
-# Интерпретатор конечных автоматов
+= Интерпретатор конечных автоматов
 
-## Кодирование автомата таблицей
+== Кодирование автомата таблицей
 
 Будем кодировать конечный автомат в виде таблицы.
 
-```{julia}
-#| output: false
+```julia
 parity_table =
     (:s0, (
         (0, :s0, :even),
@@ -189,10 +229,9 @@ parity_table =
   - в какое состояние нужно перейти и
   - какой символ послать на выход.
 
-## Генерация автомата из таблицы
+== Генерация автомата из таблицы
 
-```{julia}
-#| output: false
+```julia
 function dfa_gen_impl(tbl, start)
     body = Expr[]
 
@@ -218,39 +257,90 @@ function dfa_gen_impl(tbl, start)
 end
 ```
 
-## Результат генерации программы из таблицы
+== Результат генерации программы из таблицы
 
-```{julia}
+```julia
 dfa_gen_impl(parity_table, :s0) |> cleanup
 ```
 
- (:arrow_up:  Не забываем прокрутить.)
+#grid(
+  columns: 2,
+  gutter: 1em,
+  align: center,
+  show-jl-output(
+    font-size: 0.7em,
+    ```
+    quote
+        ys = ()
+        xs_it = iterate(xs)
+        @goto s0
+        @label s0
+        xs_it !== nothing || return ys
+        (x, xs_state) = xs_it
+        xs_it = iterate(xs, xs_state)
+        x == 0 && begin
+                ys = (ys..., :even)
+                @goto s0
+            end
+        x == 1 && begin
+                ys = (ys..., :odd)
+                @goto s1
+            end
+        error("Unexpected input: ", x)
+    end
+    ```,
+  ),
+  show-jl-output(
+    font-size: 0.6em,
+    ```
+        @label s1
+        xs_it !== nothing || return ys
+        (x, xs_state) = xs_it
+        xs_it = iterate(xs, xs_state)
+        x == 0 && begin
+                ys = (ys..., :odd)
+                @goto s1
+            end
+        x == 1 && begin
+                ys = (ys..., :even)
+                @goto s0
+            end
+        error("Unexpected input: ", x)
+    end
+    ```,
+  ),
+)
+
+// (#emoji.arrow.t.filled Не забываем прокрутить.)
 
 Получилась такая же (с точностью до форматирования) программа, как и та,
 что ранее была написана вручную.
 
-## Обёртываем генератор в `@generated function`
+== Обёртываем генератор в `@generated function`
 
-```{julia}
-#| output: false
+```julia
 @generated function dfa_gen(::Val{tbl}, ::Val{start}, xs) where {tbl,start}
     dfa_gen_impl(tbl, start)
 end
 ```
 
 - Параметр `xs` используется в `dfa_gen_impl` только "символически",
-  внутри "кавычек", а его тип - не использется. Поэтому, `xs` не
+  внутри "кавычек", а его тип - не используется. Поэтому, `xs` не
   передаётся в `dfa_gen_impl` в качестве параметра.
 
 Проверяем:
 
-```{julia}
+```julia
 dfa_gen(Val(parity_table), Val(:s0), (0, 1, 0, 1, 0))
 ```
 
-# Попытка использовать пакет `CompTime`
+```julia-output
+(:even, :odd, :odd, :even, :even)
+```
 
-## Добавление аннотаций к `dfa_gen`
+= Попытка использовать пакет `CompTime`
+
+== Добавление аннотаций к `dfa_gen`
 
 Переписываем `dfa_gen`, вставляя `@ct...`.
 
@@ -276,18 +366,7 @@ end
 - `@label @ct( )` и `@goto @ct( )` не работают как надо!
 - Не получается превращать состояния в метки: `:s0` в `s0`.
 
-<!-- 
-```{julia}
-# debug(dfa_gen_ct, Val{parity_table}, Val{:s0}, (0, 1, 0, 1, 0)) |> cleanup
-```
-
-
-```{julia}
-# dfa_gen_ct(Val{parity_table}, Val{:s0}, (0, 1, 0, 1, 0))
-```
- -->
-
-## Почему не получилось использовать `CompTime`
+== Почему не получилось использовать `CompTime`
 
 Видимо, есть принципиальные затруднения.
 
@@ -303,9 +382,11 @@ end
   получаются конструкции `@label s` и `@goto ns`, в которых `s` и `ns`
   -- не константы, а переменные.
 
-# Мудрые умозаключения
+= Мудрые умозаключения
 
-- Если писать генераторы вручную, то можно делать кое-какие вещи,
-  который не получаются с помощью частичных вычислений или стадирования.
-- Нужно подумать, может ли помочь в таких случаях суперкомпиляция.
-  (Может быть - и нет...)
+#align(left)[
+  - Если писать генераторы вручную, то можно делать кое-какие вещи,
+    который не получаются с помощью частичных вычислений или стадирования.
+  - Нужно подумать, может ли помочь в таких случаях суперкомпиляция.
+    (Может быть - и нет...)
+]
