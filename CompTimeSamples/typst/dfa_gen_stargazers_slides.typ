@@ -1,13 +1,25 @@
 #import "@preview/touying:0.5.5": *
-#import themes.simple: *
+#import themes.stargazer: *
+
+#import "@preview/numbly:0.1.0": numbly
 #import "@preview/fletcher:0.5.3" as fletcher: diagram, node, edge
 
-#show: simple-theme.with(
+#show: stargazer-theme.with(
   aspect-ratio: "4-3",
-  // footer: [Simple slides],
+  config-info(
+    // title: [Julia: генерация программ с goto],
+    title: text(font: "Comic Sans MS", style: "oblique", size: 1.5em)[
+      Julia: генерация программ\ с goto],
+    // subtitle: [Customize Your Slide Subtitle Here],
+    author: text(size: 1.3em)[Сергей Анатольевич Романенко],
+    date: [Москва, 14 июля 2024],
+    institution: [Институт прикладной математики им. М.В.Келдыша РАН],
+    // logo: image("Keldysh.jpeg"),
+  ),
 )
 
-#set text(size: 21pt, font: "FreeSans")
+#set text(size: 18pt, font: "FreeSans")
+#set text(lang: "ru")
 
 #let show-jl(font-size: 0.75em, body) = {
   rect(
@@ -47,19 +59,9 @@
   date: datetime(year: 2024, month: 7, day: 14),
 )
 
-#title-slide[
-  #v(6fr)
-  = #text(font: "Comic Sans MS", style: "italic")[
-    Julia: генерация программ\ с `goto`
-  ]
+// #set heading(numbering: numbly("{1}.", default: "1.1"))
 
-  #v(3fr)
-  *Сергей Анатольевич Романенко*
-  #v(5fr)
-  Институт им. М.В.Келдыша РАН
-  #v(1fr)
-  Москва, 14 июля 2024
-]
+#title-slide()
 
 = Пререквизиты
 

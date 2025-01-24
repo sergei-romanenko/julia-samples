@@ -1,4 +1,12 @@
 {
     "editor.unicodeHighlight.ambiguousCharacters": false,
-    "tinymist.formatterMode": "typstyle"
+    "tinymist.formatterMode": "typstyle",
+    "cSpell.customDictionaries": {
+        "custom-dictionary-workspace": {
+            "name": "custom-dictionary-workspace",
+            "path": "${workspaceFolder:typst}/.cspell/custom-dictionary-workspace.txt",
+            "addWords": true,
+            "scope": "workspace"
+        }
+    }
 }

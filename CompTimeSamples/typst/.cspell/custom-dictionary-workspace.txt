@@ -1,0 +1,8 @@
+# Custom Dictionary Words
+Keldysh
+luma
+touying
+пререквизиты
+стадирования
+стадированного
+суперкомпиляция
