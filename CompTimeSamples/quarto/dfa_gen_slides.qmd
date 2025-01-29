@@ -2,7 +2,8 @@
 title: "Julia: генерация программ с `goto`"
 author: "Сергей Анатольевич Романенко"
 institute: "Институт им. М.В.Келдыша РАН"
-date: today
+# date: today
+date: 2024-7-14
 title-slide-attributes: 
   data-background-color: "beige"
 format:
@@ -14,7 +15,7 @@ format:
     lang: ru-RU
     code-fold: false
     code-line-numbers: false
-    code-block-height: 610px
+    code-block-height: 640px
     slide-number: true
     # smaller: true
     embed-resources: false
@@ -57,10 +58,11 @@ using .MacroUtils: cleanup
 
 :::{.r-stack}
 
-```{mermaid}
+<!--
+```{mermaid .hidden}
 %%| echo: false
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px'}}}%%
-flowchart TD
+flowchart LR
 
 State0(("&nbsp;s0&nbsp;"))
 State1(("&nbsp;s1&nbsp;"))
@@ -70,6 +72,26 @@ State0 ---> |1 / odd| State1
 
 State1 ---> |0 / odd| State1
 State1 ---> |1 / even| State0
+```
+-->
+
+```{dot}
+//| echo: false
+//| fig-height: 2.0
+//| fig-align: left
+digraph {
+  rankdir=LR
+  ranksep="0.7"
+  nodesep="0.2"
+
+  node [ shape="circle" ]
+
+  s0 -> s1 [ label="0 / odd" ]
+  s0 -> s1 [ label=" ", style=invis  ]
+  s1 -> s0 [ label="1 / even" ]
+  s0 -> s0 [ label="0 / even" ]
+  s1 -> s1 [ label="0 / odd" ]
+}
 ```
 
 :::

@@ -10,6 +10,7 @@
     // title: [Julia: генерация программ с goto],
     title: text(font: "Comic Sans MS", style: "oblique", size: 1.5em)[
       Julia: генерация программ\ с goto],
+    short-title: [Julia: генерация программ с goto],
     // subtitle: [Customize Your Slide Subtitle Here],
     author: text(size: 1.3em)[Сергей Анатольевич Романенко],
     date: [Москва, 14 июля 2024],
