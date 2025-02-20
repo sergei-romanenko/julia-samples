@@ -1,0 +1,9 @@
+{
+    "editor.unicodeHighlight.ambiguousCharacters": false,
+    "unicode-latex.extensions": [
+        "plaintext",
+        "markdown",
+        "coq",
+        "qmd"
+    ]
+}

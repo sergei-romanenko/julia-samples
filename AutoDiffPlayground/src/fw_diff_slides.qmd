@@ -1,0 +1,284 @@
+---
+title: "Julia: реализация forward differentiation"
+author: "Сергей Анатольевич Романенко"
+institute: "Институт им. М.В.Келдыша РАН"
+# date: today
+date: 2025-02-20
+title-slide-attributes:
+  data-background-color: "beige"
+format:
+  revealjs:
+    theme:
+      - default
+      - fw_diff_slides.scss
+    from: markdown+emoji
+    lang: ru-RU
+    code-fold: false
+    code-line-numbers: false
+    # code-block-height: 640px
+    slide-number: true
+    # smaller: true
+    embed-resources: false
+    # embed-resources: true
+    # chalkboard: true
+execute:
+  echo: true
+engine: julia
+jupyter: julia-1.11
+---
+
+# Источники
+
+- [Simple forward-mode AD in Julia using Dual Numbers and Operator Overloading](https://www.youtube.com/watch?v=DfKKTE9XU0Q&list=PLISXH-iEM4JkHNH8Ji0ELDYcak7FD5gqa)
+
+- [Simple (scalar) forward-mode Automatic Differentiation with DualNumbers and operator overloading](https://github.com/Ceyron/machine-learning-and-simulation/blob/main/english/adjoints_sensitivities_automatic_differentiation/scalar_forward_ad_with_dual_numbers.jl)
+
+- [Automatic Differentiation in 10 minutes with Julia](https://www.youtube.com/watch?v=vAp6nUMrKYg)
+
+# Forward (прямое?) диффернецирование
+
+## Классическое дифференцирование
+
+### Правила дифференцирования
+
+- $x' = 1$
+- $(f(x) + g(x))' = f'(x) + g'(x)$
+- $(f(x)\,g(x))' = f(x)\, g'(x) + f'(x)\,g(x)$
+- $(f(g(x)))' = f'(g(x))\,g'(x)$
+- $(\sin x)' = \cos x$
+- ...
+
+### Численное дифференцирование
+
+$f'(x) = \frac{f(x + Δ) - f(x)}{Δ}$
+
+- $Δ$ _большая_ ⇒ точность маленькая.
+- $Δ$ _маленькая_ ⇒ точность тоже маленькая, из-за конечности точности
+  вычислений.
+
+## Как вычислить $f'(x)$ для _конкретного_ $x$?
+
+- **Численное** дифференцирование - плохо.
+
+- Можно **аналитически** получить формулу для производной. Какие
+  проблемы?
+  - Компьютерная алгебра - это сложно...
+  - Это не работает, если функция задана не одной формулой, а программой
+    с _циклами_.
+
+- Можно получать **численное** значения производной в _конкретной точке_,
+  используя правила дифференцирования.
+
+Например, правило
+
+- $(f(x)\,g(x))' = f(x)\, g'(x) + f'(x)\,g(x)$
+
+говорит, что если мы знаем, для _конкретного_ $x$, _значения_ функций
+$f$ и $g$, а также - _значения их производных_, то можем вычислить и
+$(f(x)\,g(x))'$.
+
+## Дуальные числа (dual numbers)
+
+Если некая функция $f$ умеет вычислять $f(x)$, то можно заставить её
+вычислять _одновременно_ $f(x)$ и $f'(x)$! Для можно подать ей на вход
+_дуальное число_.
+
+**Дуальные числа** являются выражениями вида $r + ε d$, где $r$ и $d$ -
+действительные числа, а $ε$ - символ, для которого постулируется, что
+$ε^2 = 0$ и $ε \neq 0$. Таким образом,
+
+- $(r_1 + ε d_1) + (r_2 + ε d_2) = (r_1 + r_2) + ε (d_1 + d_2)$
+- $(r_1 + ε d_1) * (r_2 + ε d_2) = (r_1 * r_2) + ε (r_1 * d_2 + d_1 * r_2)$
+
+Чем хороши дуальные числа?
+
+- $r + ε\,d$ может представлять _одновременно_ значение функции и
+  значение её производной...
+
+- Правила сложения и умножения для дуальных чисел соответствуют правилам
+  вычисления производной суммы и производной произведения.
+
+## Функция, реализующая дифференцирование
+
+Дуальные числа представляем структурами вида
+
+```{julia}
+struct DualNumber{T<:Real}
+    r::T
+    d::T
+end
+```
+
+Функция `derivative`, для аргумента $x$, будет выдавать значение функции
+$f(x)$ вместе со значением её производной $f'(x)$, в виде дуального числа:
+`DualNumber(`$f(x)$`,` $f'(x)$`)`.
+
+```{julia}
+#| output: false
+function derivative(f, x::Real)
+    f(DualNumber(x, one(x))).d
+end
+```
+
+Почему `one(x)`? А потому, что $x' = 1$.
+
+```{julia}
+#| output: false
+f(x) = x * x
+∇f(x) = 2.0 * x
+```
+
+```{julia}
+f(3.0), ∇f(3.0)
+```
+
+## Первая попытка: проблема с `*`
+
+```julia
+derivative(f, 3.0)
+```
+```text
+MethodError(*, (DualNumber{Float64}(3.0, 1.0), DualNumber{Float64}(3.0, 1.0)), 0x0000000000006867)
+```
+
+Вычисление упало! Забыли определить `*`
+для дуальных чисел.
+
+$(f(x)\,g(x))' = f(x)\, g'(x) + f'(x)\,g(x)$
+
+Операции (функции) `+`, `*`, `/` `sin`, ... определены в модуле
+`Base`. Чтобы к ним можно было добавлять новые методы, нужно сделать
+`import` для этих операций.
+
+```{julia}
+import Base: +, *, /, sin
+```
+
+```{julia}
+#| output: false
+*(x::DualNumber, y::DualNumber) =
+    DualNumber(x.r * y.r, x.r * y.d + x.d * y.r)
+*(x::Real, y::DualNumber) =
+    DualNumber(x, zero(x)) * y
+```
+
+Теперь производная вычисляется успешно!
+
+```{julia}
+derivative(f, 3.0)
+```
+
+## Вторая попытка: проблема с `sin`
+
+```{julia}
+g(x) = 3.0 * x * x + sin(x)
+∇g(x) = 6.0 * x + cos(x)
+
+g(3.0), ∇g(3.0)
+```
+
+```julia
+derivative(g, 3.0)
+```
+```text
+MethodError(sin, (DualNumber{Float64}(3.0, 1.0),), 0x0000000000006860)
+```
+
+Нужно доопределить `sin` для дуальных чисел
+
+- $(f(g(x)))' = f'(g(x))\,g'(x)$
+- $(\sin x)' = \cos x$
+
+```{julia}
+#| output: false
+sin(x::DualNumber) = DualNumber(sin(x.r), cos(x.r) * x.d)
+```
+
+## Третья попытка: проблема с `+`
+
+
+```julia
+derivative(g, 3.0)
+```
+```text
+MethodError(+, (DualNumber{Float64}(27.0, 18.0), DualNumber{Float64}(0.1411200080598672, -0.9899924966004454)), 0x0000000000006861)
+```
+
+
+Опять неудача!
+
+Нужно доопределить `+` для дуальных чисел.
+
+$(f + g)' = f' + g'$
+
+```{julia}
+#| output: false
++(x::DualNumber, y::DualNumber) =
+    DualNumber(x.r + y.r, x.d + y.d)
++(x::Real, y::DualNumber) =
+    DualNumber(x, zero(x)) + y
+```
+
+Теперь производная вычисляется успешно!
+
+```{julia}
+derivative(g, 3.0)
+```
+
+# Babylonian sqrt
+
+## "Вавилонский" метод вычисления $\sqrt x$
+
+Repeat $t ← (t + x/t)/2$ until $t$ converges to $\sqrt x$.
+
+```{julia}
+#| output: false
+function babylonian(x; N=10)
+    t = (1.0 + x) / 2.0
+    for i = 2:N
+        t = (t + x / t) / 2.0
+    end
+    t
+end
+```
+
+Проверяем.
+
+```{julia}
+sqrt(2.0), babylonian(2.0)
+```
+
+## Пытаемся "продифференцировать" `babylonian`
+
+```julia
+derivative(babylonian, 2.0)
+```
+```text
+MethodError(/, (DualNumber{Float64}(3.0, 1.0), 2.0), 0x0000000000006867)
+```
+
+Нужно доопределить `/` для дуальных чисел.
+
+$(f(x)/g(x))' = (f'(x)\,g(x) - f(x)\,g'(x))/g^2(x)$
+
+```{julia}
+#| output: false
+/(x::DualNumber, y::DualNumber) =
+    DualNumber(x.r / y.r, (x.d * y.r - x.r * y.d) / (y.r * y.r))
+/(x::DualNumber, y::Real) =
+    x / DualNumber(y, zero(y))
+```
+
+Теперь производная вычисляется успешно!
+
+```{julia}
+∇sqrt(x) = 0.5 / sqrt(x)
+
+derivative(babylonian, 2.0), ∇sqrt(2.0)
+```
+
+# Мудрые умозаключения
+
+- Можно "натянуть" на одну и ту же программу две семантики!
+- Можно доопределять операции для нестандартной семантики инкрементно,
+  по мере надобности.

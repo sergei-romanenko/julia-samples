@@ -22,7 +22,7 @@ format:
     # chalkboard: true
 execute: 
   echo: true
-jupyter: julia-1.10
+jupyter: julia-1.11
 ---
 
 # Julia: специализация/генерация программ без метапрограммирования
