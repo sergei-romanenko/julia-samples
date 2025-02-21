@@ -1,8 +1,8 @@
 ---
-title: "Julia: оптимизация вычислений во время компиляции"
+title: "Julia: стадирование программ и оптимизация вычислений во время компиляции"
 author: "Сергей Анатольевич Романенко"
 institute: "Институт им. М.В.Келдыша РАН"
-date: today
+date: 2024-06-13
 title-slide-attributes: 
   data-background-color: "beige"
 format:
@@ -21,7 +21,7 @@ format:
     # chalkboard: true
 execute: 
   echo: true
-jupyter: julia-1.10
+jupyter: julia-1.11
 ---
 
 # Что такое Julia?
