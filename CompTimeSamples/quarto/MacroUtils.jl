@@ -12,7 +12,7 @@ function rmcst1(ex)
     l = length(ex.args)
     for i in 1 : l - 1
         # @show ex.args[i]
-        isexpr(ex.args[i]) && push!(r.args, ex.args[i])
+        typeof(ex.args[i]) === Expr && push!(r.args, ex.args[i])
     end
     push!(r.args, ex.args[l])
     # Don't use `unblock` to preserve line nos.
