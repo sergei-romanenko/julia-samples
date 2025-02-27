@@ -18,7 +18,7 @@ format:
     code-block-height: 640px
     slide-number: true
     # smaller: true
-    embed-resources: false
+    embed-resources: true
     # chalkboard: true
 execute: 
   echo: true
@@ -84,7 +84,7 @@ digraph {
 
   node [ shape="circle" ]
 
-  s0 -> s1 [ label="0 / odd" ]
+  s0 -> s1 [ label="1 / odd" ]
   s0 -> s1 [ label=" ", style=invis  ]
   s1 -> s0 [ label="1 / even" ]
   s0 -> s0 [ label="0 / even" ]
@@ -95,7 +95,7 @@ digraph {
 - Если уже прочитанная последовательность содержит ***четное***
   количество символов `1`, на выход пишется `even`.
 - Если уже прочитанная последовательность содержит ***нечетное***
-  количество символов `1`, на выход пишется `even`.
+  количество символов `1`, на выход пишется `odd`.
 
 
 ## Реализация без `goto`
