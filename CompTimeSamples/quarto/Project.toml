@@ -2,6 +2,7 @@
 CompTime = "0fb5dd42-039a-4ca4-a1d7-89a96eae6d39"
 IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+Metatheory = "e9d8d322-4543-424a-9be4-0cc815abe26c"
 
 [compat]
 IJulia = "1.26.0"
