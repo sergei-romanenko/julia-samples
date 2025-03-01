@@ -1,0 +1,497 @@
+---
+title: "Julia: стадирование и динамическое программирование"
+subtitle: "Longest Common Subsequence"
+author: "Сергей Анатольевич Романенко"
+institute: "Институт им. М.В.Келдыша РАН"
+# date: today
+date: 2025-03-01
+bibliography: shonan_hmm_slides.bib
+# csl: nature-no-superscript.csl
+title-slide-attributes: 
+  data-background-color: "beige"
+format:
+  revealjs:
+    theme:
+      - default
+      - memo_lcs_slides.scss
+    from: markdown+emoji
+    lang: ru-RU
+    code-fold: false
+    code-line-numbers: false
+    code-block-height: 680px
+    slide-number: true
+    # smaller: true
+    embed-resources: true
+    # chalkboard: true
+execute: 
+  echo: true
+jupyter: julia-1.11
+---
+
+# Проблема: найти самую длинную общую подпоследовательность
+
+## Решаемая проблема
+
+Подпоследовательность - это строка, сгенерированная из исходной строки
+путем удаления 0 или более символов и без изменения относительного
+порядка остальных символов.
+
+Например, подпоследовательностями “ABC” являются “”, “A”, “B”, “C”,
+“AB”, “AC”, “BC” и “ABC”.
+
+В общем случае, строка длины $n$ имеет $2^n$ подпоследовательностей.
+
+Заданы две строки s1 и s2. Требуется найти длину самой длинной общей
+подпоследовательности. Если общей подпоследовательности нет - выдать 0.
+
+## "Наивный" рекурсивный алгоритм
+
+. Время - $O(2^{\min(m,n)})$, память - $O(\min(m, n))$
+
+```{julia}
+#| output: false
+# A Naive recursive implementation of LCS problem
+
+# Returns length of LCS for s1[1:i], s2[1:j]
+function lcs(i, j, s1, s2)
+    if (i == 0 || j == 0)
+        0
+    elseif (s1[i] == s2[j])
+        1 + lcs(i - 1, j - 1, s1, s2)
+    else
+        max(lcs(i, j - 1, s1, s2), lcs(i - 1, j, s1, s2))
+    end
+end
+
+lcs(s1, s2) = lcs(length(s1), length(s2), s1, s2)
+```
+
+## Тестируем алгоритм
+
+```{julia}
+using Test
+```
+
+```{julia}
+@test lcs("ABC", "ACD") == 2
+# The longest common subsequence is “GTAB”.
+@test lcs("AGGTAB", "GXTXAYB") == 4
+@test lcs("ABC", "CBA") == 1
+```
+
+# Мемоизация
+
+## Алгоритм с мемоизацией
+
+Время - $O(m * n)$, память - $O(m * n)$.
+
+```{julia}
+#| output: false
+# A recursive solution of LCS problem with memoization
+
+function lcs_memo(i, j, d, s1, s2)
+    haskey(d, (i, j)) && return d[(i, j)]
+
+    r =
+        if (i == 0 || j == 0)
+            0
+        else
+            if (s1[i] == s2[j])
+                1 + lcs_memo(i - 1, j - 1, d, s1, s2)
+            else
+                max(lcs_memo(i, j - 1, d, s1, s2), lcs_memo(i - 1, j, d, s1, s2))
+            end
+        end
+
+    d[(i, j)] = r
+    return r
+end
+```
+
+```{julia}
+#| output: false
+function lcs_memo(s1, s2)
+    d = Dict{Tuple{Int,Int},Int}()
+    lcs_memo(length(s1), length(s2), d, s1, s2)
+end
+```
+
+## Тестируем
+
+```{julia}
+@test lcs_memo("ABC", "ACD") == 2
+# The longest common subsequence is “GTAB”.
+@test lcs_memo("AGGTAB", "GXTXAYB") == 4
+@test lcs_memo("ABC", "CBA") == 1
+```
+
+# Специализация по `i` и `j`
+
+## Источники вдохновения
+
+- Peter Thiemann. 1999. **Combinators for program generation.** J.
+  Funct. Program. 9, 5 (September 1999), 483–525.
+  <https://doi.org/10.1017/S0956796899003469>
+
+- Kedar Swadi, Walid Taha, Oleg Kiselyov. 2005. **Staging dynamic
+  programming algorithms**. Unpublished manuscript (April 2005),
+  available from: <http://www.cs.rice.edu/~taha/publications.html>.
+
+- Yukiyoshi Kameyama, Oleg Kiselyov, and Chung-chieh Shan. 2009.
+  **Shifting the stage: staging with delimited control.** In Proceedings
+  of the 2009 ACM SIGPLAN workshop on Partial evaluation and program
+  manipulation (PEPM '09). Association for Computing Machinery, New
+  York, NY, USA, 111–120. <https://doi.org/10.1145/1480945.1480962>
+
+- Oleg Kiselyov. 2010. **Delimited control in OCaml, abstractly and
+  concretely: system description.** In Proceedings of the 10th
+  international conference on Functional and Logic Programming
+  (FLOPS'10). Springer-Verlag, Berlin, Heidelberg, 304–320.
+  <https://doi.org/10.1007/978-3-642-12251-4_22>
+
+##
+
+"Наивный" генератор. Получается одно громадное выражение, в котором есть
+совпадающие подвыражения.
+
+```{julia}
+#| output: false
+function lcs_gen_impl1(i, j)
+    if (i == 0 || j == 0)
+        0
+    else
+        quote
+            if (s1[$i] == s2[$j])
+                1 + $(lcs_gen_impl1(i - 1, j - 1))
+            else
+                max($(lcs_gen_impl1(i, j - 1)), $(lcs_gen_impl1(i - 1, j)))
+            end
+        end
+    end
+end
+```
+
+## Результат генерации
+
+```{julia}
+using MacroTools: prettify
+```
+
+```{julia}
+lcs_gen_impl1(2, 3) |> prettify
+```
+
+## Промежуточные переменные
+
+Не очень хорошо, когда выражения получаются слишком большими. (Это может
+"взорвать" компилятор, и читать трудно.)
+
+Посему, введём переменные для промежуточных результатов.
+
+Ну, а ещё - введение переменных - это подготовка мемоизации.
+
+```{julia}
+#| output: false
+function lcs_gen_impl2(i, j)
+    if (i == 0 || j == 0)
+        0
+    else
+        r0 = Symbol("r_", i - 1, "_", j - 1)
+        r1 = Symbol("r_", i, "_", j - 1)
+        r2 = Symbol("r_", i - 1, "_", j)
+        quote
+            if (s1[$i] == s2[$j])
+                let
+                    local $r0 = $(lcs_gen_impl2(i - 1, j - 1))
+                    1 + $r0
+                end
+            else
+                let
+                    local $r1 = $(lcs_gen_impl2(i, j - 1))
+                    local $r2 = $(lcs_gen_impl2(i - 1, j))
+                    max($r1, $r2)
+                end
+            end
+        end
+    end
+end
+```
+
+## Проверяем
+
+```{julia}
+lcs_gen_impl2(2, 3) |> prettify
+```
+
+Недостаток сгенерированной программы в том, что одни и те же выражения
+повторяются в программе несколько раз.
+
+## Оформляем как generated function
+
+```{julia}
+#| output: false
+@generated function lcs_gen2(::Val{i}, ::Val{j}, s1, s2) where {i,j}
+    lcs_gen_impl2(i, j)
+end
+```
+
+```{julia}
+#| output: false
+function lcs_gen2(s1, s2)
+    lcs_gen2(Val(length(s1)), Val(length(s2)), s1, s2)
+end
+```
+
+Проверяем
+
+```{julia}
+@test lcs_gen2("ABC", "ACD") == 2
+# The longest common subsequence is “GTAB”.
+# @test lcs_gen2("AGGTAB", "GXTXAYB") == 4
+@test lcs_gen2("ABC", "CBA") == 1
+```
+
+## Выносим присваивания из-под `if`
+
+Можно вынести присваивания из-под `if (s1[i] == s2[j])`. Тогда будут
+выполняться лишние вычисления, но асимптотика от этого не изменится.
+
+```{julia}
+#| output: false
+function lcs_gen_impl3(i, j)
+    if (i == 0 || j == 0)
+        0
+    else
+        r0 = Symbol("r_", i - 1, "_", j - 1)
+        r1 = Symbol("r_", i, "_", j - 1)
+        r2 = Symbol("r_", i - 1, "_", j)
+        quote
+            $r0 = $(lcs_gen_impl3(i - 1, j - 1))
+            $r1 = $(lcs_gen_impl3(i, j - 1))
+            $r2 = $(lcs_gen_impl3(i - 1, j))
+            if (s1[$i] == s2[$j])
+                1 + $r0
+            else
+                max($r1, $r2)
+            end
+        end
+    end
+end
+```
+
+## Проверяем
+
+```{julia}
+lcs_gen_impl3(2, 3) |> prettify
+```
+
+Теперь недостаток в том, что одно и то же выражение вычисляется и
+присваивается несколько раз.
+
+Кроме того, генерируются переменные, которым присваиваются константы.
+
+## Выделение общих подвыражений, подстановка констант
+
+Можно решить эти две проблемы, заведя словарь, в котором будет
+регистрироваться, какие подвыражения уже вычислялись, а какие - нет.
+
+В результате получим асимптотику: время - $O(m * n)$, память - $O(m *
+n)$.
+
+```{julia}
+#| output: false
+function ass!(es, d, s::Symbol, c::Int64)
+    d[s] = c
+end
+
+function ass!(es, d, s::Symbol, u::Symbol)
+    d[s] = u
+end
+
+function ass!(es, d, s::Symbol, e)
+    haskey(d, s) && return
+    d[s] = s
+    push!(es, :($s = $e))
+end
+```
+
+##
+
+```{julia}
+#| output: false
+function lcs_gen_impl4!(es, d, i, j)
+    r = Symbol("r_", i, "_", j)
+
+    if haskey(d, r)
+        return d[r]
+    end
+
+    if (i == 0 || j == 0)
+        ass!(es, d, r, 0)
+    else
+        r0 = lcs_gen_impl4!(es, d, i - 1, j - 1)
+        r1 = lcs_gen_impl4!(es, d, i, j - 1)
+        r2 = lcs_gen_impl4!(es, d, i - 1, j)
+        ass!(es, d, r, :(
+            s1[$i] == s2[$j] ? 1 + $r0 : max($r1, $r2)
+        ))
+    end
+
+    return d[r]
+end
+```
+
+##
+
+```{julia}
+#| output: false
+function lcs_gen_impl4(i, j)
+    es = Expr[]
+    d = Dict{Symbol,Any}()
+    r = lcs_gen_impl4!(es, d, i, j)
+
+    quote
+        $(es...)
+        return $r
+    end
+end
+```
+
+##
+
+```{julia}
+lcs_gen_impl4(2, 3) |> prettify
+```
+
+##
+
+```{julia}
+#| output: false
+@generated function lcs_gen4(::Val{i}, ::Val{j}, s1, s2) where {i,j}
+    lcs_gen_impl4(i, j)
+end
+
+function lcs_gen4(s1, s2)
+    lcs_gen4(Val(length(s1)), Val(length(s2)), s1, s2)
+end
+```
+
+Проверяем:
+
+```{julia}
+@test lcs_gen4("ABC", "ACD") == 2
+# The longest common subsequence is “GTAB”.
+@test lcs_gen4("AGGTAB", "GXTXAYB") == 4
+@test lcs_gen4("ABC", "CBA") == 1
+```
+
+# Упрощение выражений через переписывание (`Metatheory.jl`)
+
+## Пакет `Metatheory.jl`: реализация правил переписывания
+
+```{julia}
+using Metatheory, Metatheory.Rewriters
+```
+
+```{julia}
+#| output: false
+opt_rules = @theory x y begin
+
+    x::Int64 + y::Int64 => x + y
+
+    max(0, y) --> y
+    max(x, 0) --> x
+
+end
+```
+
+```{julia}
+#| output: false
+strategy = (#= Fixpoint ∘ =# Postwalk ∘ Chain)
+opt_expr(e) = strategy(opt_rules)(e)
+```
+
+```{julia}
+@test opt_expr(:(2 + 3)) == 5
+@test opt_expr(:(max(10, 0))) == 10
+@test opt_expr(:(max(0, 20))) == 20
+@test opt_expr(:(true ? 1 + 2 : 3 + 4)) == :(true ? 3 : 7)
+```
+
+##
+
+```{julia}
+#| output: false
+function ass_o!(es, d, s::Symbol, e)
+    ass!(es, d, s, opt_expr(e))
+end
+```
+
+```{julia}
+#| output: false
+function lcs_gen_impl5!(es, d, i, j)
+    r = Symbol("r_", i, "_", j)
+
+    if haskey(d, r)
+        return d[r]
+    end
+
+    if (i == 0 || j == 0)
+        ass_o!(es, d, r, 0)
+    else
+        r0 = lcs_gen_impl5!(es, d, i - 1, j - 1)
+        r1 = lcs_gen_impl5!(es, d, i, j - 1)
+        r2 = lcs_gen_impl5!(es, d, i - 1, j)
+        ass_o!(es, d, r, :(
+            s1[$i] == s2[$j] ? 1 + $r0 : max($r1, $r2)
+        ))
+    end
+
+    return d[r]
+end
+```
+
+##
+
+```{julia}
+#| output: false
+function lcs_gen_impl5(i, j)
+    es = Expr[]
+    d = Dict{Symbol,Any}()
+    r = lcs_gen_impl5!(es, d, i, j)
+
+    quote
+        $(es...)
+        return $r
+    end
+end
+```
+
+##
+
+```{julia}
+lcs_gen_impl5(2, 3) |> prettify
+```
+
+##
+
+```{julia}
+#| output: false
+@generated function lcs_gen5(::Val{i}, ::Val{j}, s1, s2) where {i,j}
+    lcs_gen_impl5(i, j)
+end
+```
+
+```{julia}
+#| output: false
+function lcs_gen5(s1, s2)
+    lcs_gen5(Val(length(s1)), Val(length(s2)), s1, s2)
+end
+```
+
+```{julia}
+@test lcs_gen5("ABC", "ACD") == 2
+# # The longest common subsequence is “GTAB”.
+@test lcs_gen5("AGGTAB", "GXTXAYB") == 4
+@test lcs_gen5("ABC", "CBA") == 1
+```

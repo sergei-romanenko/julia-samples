@@ -1,0 +1,418 @@
+---
+title: "Julia: стадирование и динамическое программирование"
+subtitle: "0/1 Knapsack problem"
+author: "Сергей Анатольевич Романенко"
+institute: "Институт им. М.В.Келдыша РАН"
+# date: today
+date: 2025-03-01
+
+jupyter: julia-1.11
+---
+
+# 0/1 Knapsack problem
+
+## "Разделяй и властвуй" ⟹ рекурсивная программа
+
+```{julia}
+#| output: false
+function ks(i, w, wt, vl)
+    if i == 0
+        0
+    elseif w == 0
+        0
+    elseif wt[i] > w
+        ks(i - 1, w, wt, vl)
+    else
+        r1 = ks(i - 1, w - wt[i], wt, vl)
+        r2 = ks(i - 1, w, wt, vl)
+        max(vl[i] + r1, r2)
+    end
+end
+
+ks(w, wt, vl) = ks(length(wt), w, wt, vl)
+```
+
+```{julia}
+using Test
+```
+
+```{julia}
+@test ks(50, (10, 20, 30), (100, 200, 300)) == 500
+```
+
+## Специализация по `w` и `wt`
+
+```{julia}
+#| output: false
+function ks_gen_impl1(i, w, wt)
+    if i == 0
+        0
+    elseif w == 0
+        0
+    elseif wt[i] > w
+        ks_gen_impl1(i - 1, w, wt)
+    else
+        r1 = ks_gen_impl1(i - 1, w - wt[i], wt)
+        r2 = ks_gen_impl1(i - 1, w, wt)
+        :(max(vl[$i] + $r1, $r2))
+    end
+end
+
+ks_gen_impl1(w, wt) = ks_gen_impl1(length(wt), w, wt)
+```
+
+```{julia}
+using MacroTools: prettify
+```
+
+```{julia}
+ks_gen_impl1(50, (10, 20, 30)) |> prettify
+```
+
+## Мемоизация
+
+```{julia}
+#| output: false
+function ass!(es, d, s::Symbol, c::Int64)
+    d[s] = c
+end
+
+function ass!(es, d, s::Symbol, u::Symbol)
+    d[s] = u
+end
+
+function ass!(es, d, s::Symbol, e)
+    haskey(d, s) && return
+    d[s] = s
+    push!(es, :($s = $e))
+end
+```
+
+```{julia}
+#| output: false
+function ks_gen_impl2!(es, d, i, w, wt)
+    r = Symbol("r_", i, "_", w)
+
+    if haskey(d, r)
+        return d[r]
+    end
+
+    if i == 0
+        ass!(es, d, r, 0)
+    elseif w == 0
+        ass!(es, d, r, 0)
+    elseif wt[i] > w
+        ass!(es, d, r, ks_gen_impl2!(es, d, i - 1, w, wt))
+    else
+        r1 = ks_gen_impl2!(es, d, i - 1, w - wt[i], wt)
+        r2 = ks_gen_impl2!(es, d, i - 1, w, wt)
+        ass!(es, d, r, :(max(vl[$i] + $r1, $r2)))
+    end
+    return d[r]
+end
+```
+
+```{julia}
+#| output: false
+function ks_gen_impl2(w, wt)
+    es = Expr[]
+    d = Dict{Symbol,Any}()
+    r = ks_gen_impl2!(es, d, length(wt), w, wt)
+
+    quote
+        $(es...)
+        return $r
+    end
+end
+```
+
+```{julia}
+ks_gen_impl2(50, (10, 20, 30)) |> prettify
+```
+<!-- 
+```{julia}
+add_s(x, y::Int64) =
+    if y == 0
+        x
+    else
+        :($x + $y)
+    end
+
+add_s(x, y) = :($x + $y)
+```
+ -->
+
+<!-- 
+```{julia}
+max_s(x, y::Int64) =
+    if y == 0
+        x
+    else
+        :(max($x, $y))
+    end
+
+max_s(x, y) = :(max($x, $y))
+```
+ -->
+<!-- 
+```{julia}
+function ks_gen_impl3!(es, d, i, w, wt)
+    r = Symbol("r_", i, "_", w)
+
+    if haskey(d, r)
+        return d[r]
+    end
+
+    if i == 0
+        ass!(es, d, r, 0)
+    elseif w == 0
+        ass!(es, d, r, 0)
+    elseif wt[i] > w
+        ass!(es, d, r, ks_gen_impl3!(es, d, i - 1, w, wt))
+    else
+        r1 = ks_gen_impl3!(es, d, i - 1, w - wt[i], wt)
+        r2 = ks_gen_impl3!(es, d, i - 1, w, wt)
+        vl_i = Symbol("vl_", i)
+        ass!(es, d, vl_i, :(vl[$i]))
+        ass!(es, d, r, max_s(add_s(vl_i, r1), r2))
+    end
+    return d[r]
+end
+```
+ -->
+
+<!-- 
+```{julia}
+function ks_gen_impl3(w, wt)
+    es = Expr[]
+    d = Dict{Symbol,Any}()
+    r = ks_gen_impl3!(es, d, length(wt), w, wt)
+
+    quote
+        $(es...)
+        return $r
+    end
+end
+```
+ -->
+<!-- 
+```{julia}
+ks_gen_impl3(50, (10, 20, 30)) |> prettify
+```
+
+```{julia}
+ks_gen_impl3(60, (70, 10, 50, 20, 30, 40, 60)) |> prettify
+```
+
+```{julia}
+@generated function ks_gen3(::Val{w}, ::Val{wl}, vl) where {w,wl}
+    ks_gen_impl3(w, wl)
+end
+```
+
+```{julia}
+@test ks_gen3(Val(50), Val((10, 20, 30)), (100, 200, 300)) == 500
+```
+ -->
+
+<!-- ## Дополнительная оптимизация -->
+
+<!-- 
+```{julia}
+using MacroTools: postwalk, @capture
+```
+ -->
+<!-- 
+```{julia}
+function opt_step(e)
+    if @capture(e, x_ + 0)
+        x
+    elseif @capture(e, max(x_, 0))
+        x
+    elseif @capture(e, max(x_ + y1_, y2_)) && y1 == y2
+        :($x + $y1)
+    else
+        e
+    end
+end
+
+opt_expr(e) = postwalk(opt_step, e)
+```
+ -->
+
+<!-- 
+```{julia}
+@test opt_expr(:(a + c)) == :(a + c)
+@test opt_expr(:(a + 0)) == :a
+
+@test opt_expr(:(max(a, c))) == :(max(a, c))
+@test opt_expr(:(max(a, 0))) == :a
+
+@test opt_expr(:(max(a + b, c))) == :(max(a + b, c))
+@test opt_expr(:(max(a + (b + c), b + c))) == :(a + (b + c))
+
+@test opt_expr(:(max(a + b, b + 0))) == :(a + b)
+```
+ -->
+
+<!-- 
+```{julia}
+function ks_gen_impl4!(es, d, i, w, wt)
+    r = Symbol("r_", i, "_", w)
+
+    if haskey(d, r)
+        return d[r]
+    end
+
+    if i == 0
+        ass!(es, d, r, 0)
+    elseif w == 0
+        ass!(es, d, r, 0)
+    elseif wt[i] > w
+        ass!(es, d, r, ks_gen_impl4!(es, d, i - 1, w, wt))
+    else
+        r1 = ks_gen_impl4!(es, d, i - 1, w - wt[i], wt)
+        r2 = ks_gen_impl4!(es, d, i - 1, w, wt)
+        vl_i = Symbol("vl_", i)
+        ass!(es, d, vl_i, :(vl[$i]))
+        ass!(es, d, r, opt_expr(
+            :(max($vl_i + $r1, $r2))
+        ))
+    end
+    return d[r]
+end
+```
+ -->
+<!-- 
+```{julia}
+function ks_gen_impl4(w, wt)
+    es = Expr[]
+    d = Dict{Symbol,Any}()
+    r = ks_gen_impl4!(es, d, length(wt), w, wt)
+
+    quote
+        $(es...)
+        return $r
+    end
+end
+```
+ -->
+
+<!-- 
+```{julia}
+ks_gen_impl4(50, (10, 20, 30)) |> prettify
+```
+
+```{julia}
+ks_gen_impl4(60, (70, 10, 50, 20, 30, 40, 60)) |> prettify
+```
+
+```{julia}
+@generated function ks_gen4(::Val{w}, ::Val{wl}, vl) where {w,wl}
+    ks_gen_impl4(w, wl)
+end
+```
+
+```{julia}
+@test ks_gen4(Val(50), Val((10, 20, 30)), (100, 200, 300)) == 500
+```
+ -->
+
+## Упрощение выражений через переписывание (Metatheory.jl)
+
+```{julia}
+#| output: false
+using Metatheory, Metatheory.Rewriters
+```
+
+```{julia}
+#| output: false
+opt_rules = @theory x y begin
+    # x::Int64 + y::Int64 => x + y
+
+    x + 0 --> x
+    # We know that x >= 0 !
+    max(x, 0) --> x
+    max(x + y, y) --> x + y
+end
+```
+
+```{julia}
+#| output: false
+strategy = (#= Fixpoint ∘ =# Postwalk ∘ Chain)
+opt_expr2(e) = strategy(opt_rules)(e)
+```
+
+```{julia}
+@test opt_expr2(:(a + c)) == :(a + c)
+@test opt_expr2(:(a + 0)) == :a
+
+@test opt_expr2(:(max(a, c))) == :(max(a, c))
+@test opt_expr2(:(max(a, 0))) == :a
+
+@test opt_expr2(:(max(a + b, c))) == :(max(a + b, c))
+@test opt_expr2(:(max(a + (b + c), b + c))) == :(a + (b + c))
+
+@test opt_expr2(:(max(a + b, b + 0))) == :(a + b)
+```
+
+```{julia}
+#| output: false
+function ks_gen_impl!(es, d, i, w, wt)
+    r = Symbol("r_", i, "_", w)
+
+    if haskey(d, r)
+        return d[r]
+    end
+
+    if i == 0
+        ass!(es, d, r, 0)
+    elseif w == 0
+        ass!(es, d, r, 0)
+    elseif wt[i] > w
+        ass!(es, d, r, ks_gen_impl!(es, d, i - 1, w, wt))
+    else
+        r1 = ks_gen_impl!(es, d, i - 1, w - wt[i], wt)
+        r2 = ks_gen_impl!(es, d, i - 1, w, wt)
+        vl_i = Symbol("vl_", i)
+        ass!(es, d, vl_i, :(vl[$i]))
+        ass!(es, d, r, opt_expr2(
+            :(max($vl_i + $r1, $r2))
+        ))
+    end
+    return d[r]
+end
+```
+
+```{julia}
+#| output: false
+function ks_gen_impl(w, wt)
+    es = Expr[]
+    d = Dict{Symbol,Any}()
+    r = ks_gen_impl!(es, d, length(wt), w, wt)
+
+    quote
+        $(es...)
+        return $r
+    end
+end
+```
+
+```{julia}
+ks_gen_impl(50, (10, 20, 30)) |> prettify
+```
+
+```{julia}
+ks_gen_impl(60, (70, 10, 50, 20, 30, 40, 60)) |> prettify
+```
+
+```{julia}
+@generated function ks_gen5(::Val{w}, ::Val{wl}, vl) where {w,wl}
+    ks_gen_impl(w, wl)
+end
+```
+
+```{julia}
+@test ks_gen5(Val(50), Val((10, 20, 30)), (100, 200, 300)) == 500
+```
+
