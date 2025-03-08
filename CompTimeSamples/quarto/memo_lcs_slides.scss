@@ -20,7 +20,7 @@ div.cell-output.cell-output-display {
 }
  */
 
- .title-slide.slide.level1 {
+.title-slide.slide.level1 {
     background-color: beige;
 }
 
@@ -28,6 +28,15 @@ h1 {
     font-family: cursive !important;
 }
 
+.subtitle {
+    font-size: 1.6em;
+}
+
 div.quarto-title-authors {
     font-size: 1.6em;
 }
+
+.cell .cell-output-display pre code {
+    max-height: 480px;
+    overflow-y: auto;
+  }

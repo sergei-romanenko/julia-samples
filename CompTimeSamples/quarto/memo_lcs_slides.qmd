@@ -1,11 +1,11 @@
 ---
 title: "Julia: стадирование и динамическое программирование"
-subtitle: "Longest Common Subsequence"
+subtitle: "(Longest Common Subsequence)"
 author: "Сергей Анатольевич Романенко"
 institute: "Институт им. М.В.Келдыша РАН"
 # date: today
 date: 2025-03-01
-bibliography: shonan_hmm_slides.bib
+# bibliography: shonan_hmm_slides.bib
 # csl: nature-no-superscript.csl
 title-slide-attributes: 
   data-background-color: "beige"
@@ -28,7 +28,7 @@ execute:
 jupyter: julia-1.11
 ---
 
-# Проблема: найти самую длинную общую подпоследовательность
+# Проблема: найти длину самой длинной общей подпоследовательности
 
 ## Решаемая проблема
 
@@ -41,12 +41,281 @@ jupyter: julia-1.11
 
 В общем случае, строка длины $n$ имеет $2^n$ подпоследовательностей.
 
-Заданы две строки s1 и s2. Требуется найти длину самой длинной общей
-подпоследовательности. Если общей подпоследовательности нет - выдать 0.
+\
+**Задача.**
+
+> **Заданы две строки s1 и s2. Требуется найти длину самой длинной общей
+> подпоследовательности. Если общей подпоследовательности нет - выдать
+> 0.**
+
+Обозначим через `lcs(i, j, s1, s2)` длину самой длинной общей
+подпоследовательности для `s1[1:i]` и `s2[1:j]`.
+
+## Примеры подпоследовательностей {.smaller}
+
+```{dot}
+//| echo: false
+//| fig-height: 2.0
+//| fig-align: center
+graph {
+  rankdir=TD
+  ranksep="0.3"
+  nodesep="0.1"
+
+node [ fontsize=12 shape=circle margin=0.0 width=0.0 ]
+
+u1 [ label="A" ]
+u2 [ label="B" ]
+u3 [ label="C" ]
+
+v1 [ label="A" ]
+v2 [ label="C" ]
+v3 [ label="D" ]
+
+{
+    rank=same
+    edge [ style=invis ]
+    u1 -- u2 -- u3
+}
+{
+    rank=same
+    edge [ style=invis ]
+    v1 -- v2 -- v3
+}
+{
+    edge [ style=invis ]
+    // u1 -- v1
+    u3 -- v3
+}
+{
+    edge [ constraint=false ]
+    u1 -- v1
+    u3 -- v2
+}
+}
+```
+
+<hr>
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+```{dot}
+//| echo: false
+//| fig-height: 2.0
+//| fig-width: 4.0
+//| fig-align: center
+graph {
+  rankdir=TD
+  ranksep="0.3"
+  nodesep="0.1"
+
+node [ fontsize=14 shape=circle margin=0.0 width=0.0 ]
+
+u1 [ label="A" ]
+u2 [ label="B" ]
+u3 [ label="C" ]
+
+v1 [ label="C" ]
+v2 [ label="B" ]
+v3 [ label="A" ]
+
+{
+    rank=same
+    edge [ style=invis ]
+    u1 -- u2 -- u3
+}
+{
+    rank=same
+    edge [ style=invis ]
+    v1 -- v2 -- v3
+}
+{
+    edge [ style=invis ]
+    // u1 -- v1
+    u3 -- v3
+}
+{
+    edge [ constraint=false ]
+    u1 -- v3
+    // u3 -- v2
+}
+}
+```
+
+:::
+
+::: {.column width="50%"}
+
+```{dot}
+//| echo: false
+//| fig-height: 2.0
+//| fig-width: 4.0
+//| fig-align: center
+graph {
+  rankdir=TD
+  ranksep="0.3"
+  nodesep="0.1"
+
+node [ fontsize=14 shape=circle margin=0.0 width=0.0 ]
+
+u1 [ label="A" ]
+u2 [ label="B" ]
+u3 [ label="C" ]
+
+v1 [ label="C" ]
+v2 [ label="B" ]
+v3 [ label="A" ]
+
+{
+    rank=same
+    edge [ style=invis ]
+    u1 -- u2 -- u3
+}
+{
+    rank=same
+    edge [ style=invis ]
+    v1 -- v2 -- v3
+}
+{
+    edge [ style=invis ]
+    // u1 -- v1
+    u3 -- v3
+}
+{
+    edge [ constraint=false ]
+    // u1 -- v3
+    u3 -- v1
+}
+}
+```
+
+:::
+
+::::
+
+<hr>
+
+```{dot}
+//| echo: false
+//| fig-height: 2.0
+//| fig-align: center
+graph {
+  rankdir=TD
+  ranksep="0.3"
+  nodesep="0.1"
+
+node [ fontsize=14 shape=circle margin=0.0 width=0.0 ]
+
+u1 [ label="A" ]
+u2 [ label="G" ]
+u3 [ label="G" ]
+u4 [ label="T" ]
+u5 [ label="A" ]
+u6 [ label="B" ]
+u7 [ label="?" style="invis" ]
+
+v1 [ label="G" ]
+v2 [ label="X" ]
+v3 [ label="T" ]
+v4 [ label="X" ]
+v5 [ label="A" ]
+v6 [ label="Y" ]
+v7 [ label="B" ]
+
+{
+    rank=same
+    edge [ style=invis ]
+    u1 -- u2 -- u3 -- u4 -- u5 -- u6 -- u7
+}
+{
+    rank=same
+    edge [ style=invis ]
+    v1 -- v2 -- v3 -- v4 -- v5 -- v6 -- v7
+}
+{
+    edge [ style=invis ]
+    u1 -- v1
+    u7 -- v7
+}
+{
+    edge [ constraint=false ]
+    u3 -- v1
+    u4 -- v3
+    u5 -- v5
+    u6 -- v7
+}
+}
+```
+
+# Рекурсивный алгоритм
+\
+**Время - $O(2^{\min(m,n)})$, память - $O(\min(m, n))$**
+
+## "Разделяй и властвуй"
+
+:::: {.columns}
+
+::: {.column width="45%"}
+
+**Сведение задачи к подзадачам:**
+
+```{dot}
+//| echo: false
+//| fig-width: 4.3
+//| fig-align: center
+digraph {
+  rankdir=TD
+  ranksep="0.7"
+  nodesep="0.4"
+
+node [ fontsize=20 ]
+node [ shape=box ]
+
+Problem [ label="Задача" ]
+Subproblem1 [ label="Подзадача 1"]
+Subproblem2 [ label="Подзадача 2"]
+
+node [ shape=box style=rounded ]
+Solution1 [ label="Решение 1"]
+Solution2 [ label="Решение 2"]
+Solution [ label="Решение"]
+Combine12 [ label="" shape=circle fixedsize=true width=0.5]
+
+Problem -> Subproblem1 [ style=dashed ]
+Subproblem1 -> Solution1
+
+Problem -> Subproblem2 [ style=dashed ]
+Subproblem2 -> Solution2
+
+Solution1 -> Combine12
+Solution2 -> Combine12
+
+Combine12 -> Solution
+}
+```
+
+:::
+
+::: {.column width="55%"}
+
+**При вычислении `lcs(i, j, s1, s2)` рассматриваем 3 случая.**
+
+- `i == 0 || j == 0`. Обе строки пустые.
+- `s1[i] == s2[j]`. Сопоставляем `s1[i]` и `s2[j]` и решаем подзадачу
+  `lcs(i - 1, j - 1, s1, s2)`.
+- В противном случае решаем две подзадачи, lcs(i, j - 1, s1, s2) и
+  `lcs(i - 1, j, s1, s2)`.
+
+:::
+
+::::
+
 
 ## "Наивный" рекурсивный алгоритм
 
-. Время - $O(2^{\min(m,n)})$, память - $O(\min(m, n))$
+Время - $O(2^{\min(m,n)})$, память - $O(\min(m, n))$
 
 ```{julia}
 #| output: false
@@ -68,27 +337,29 @@ lcs(s1, s2) = lcs(length(s1), length(s2), s1, s2)
 
 ## Тестируем алгоритм
 
-```{julia}
-using Test
-```
+Для тестирования используем пакет `Test`.
 
 ```{julia}
+using Test
+
 @test lcs("ABC", "ACD") == 2
 # The longest common subsequence is “GTAB”.
 @test lcs("AGGTAB", "GXTXAYB") == 4
 @test lcs("ABC", "CBA") == 1
 ```
 
+Получается то, что надо...
+
 # Мемоизация
+\
+**Время - $O(m * n)$, память - $O(m * n)$.**
 
-## Алгоритм с мемоизацией
+## Рекурсивный алгоритм с мемоизацией
 
-Время - $O(m * n)$, память - $O(m * n)$.
+<!-- Время - $O(m * n)$, память - $O(m * n)$. -->
 
 ```{julia}
 #| output: false
-# A recursive solution of LCS problem with memoization
-
 function lcs_memo(i, j, d, s1, s2)
     haskey(d, (i, j)) && return d[(i, j)]
 
@@ -103,13 +374,9 @@ function lcs_memo(i, j, d, s1, s2)
             end
         end
 
-    d[(i, j)] = r
-    return r
+    d[(i, j)] = r; return r
 end
-```
 
-```{julia}
-#| output: false
 function lcs_memo(s1, s2)
     d = Dict{Tuple{Int,Int},Int}()
     lcs_memo(length(s1), length(s2), d, s1, s2)
@@ -125,7 +392,9 @@ end
 @test lcs_memo("ABC", "CBA") == 1
 ```
 
-# Специализация по `i` и `j`
+Получается то, что надо...
+
+# Специализация `lcs_memo(s1, s2)` по `i` и `j`
 
 ## Источники вдохновения
 
@@ -149,10 +418,11 @@ end
   (FLOPS'10). Springer-Verlag, Berlin, Heidelberg, 304–320.
   <https://doi.org/10.1007/978-3-642-12251-4_22>
 
-##
+## "Наивный" генератор.
 
-"Наивный" генератор. Получается одно громадное выражение, в котором есть
-совпадающие подвыражения.
+Берём функцию `lcs_memo` и наивно разделяем части, которые будут
+исполняться на первом этапе, и части, которые будут исполняться на
+втором этапе.
 
 ```{julia}
 #| output: false
@@ -171,15 +441,36 @@ function lcs_gen_impl1(i, j)
 end
 ```
 
-## Результат генерации
+
+## Результат вычисления `lcs_gen_impl1(2, 3)`
+
+Функция `prettify` используется для очистки генерируемого кода от
+"мусора" (ссылок на номера строк в программе-генераторе).
 
 ```{julia}
 using MacroTools: prettify
 ```
 
-```{julia}
+Теперь посмотрим, что сгенерируется при вызове `lcs_gen_impl1(2, 3)`.
+
+```julia
 lcs_gen_impl1(2, 3) |> prettify
 ```
+(Смотрим следующий слайд.)
+
+## Результат вычисления `lcs_gen_impl1(2, 3)`
+
+<hr>
+
+```{julia}
+#| echo: false
+lcs_gen_impl1(2, 3) |> prettify
+```
+
+<hr>
+
+Получается одно громадное выражение, в котором есть
+совпадающие подвыражения.
 
 ## Промежуточные переменные
 
@@ -187,8 +478,6 @@ lcs_gen_impl1(2, 3) |> prettify
 "взорвать" компилятор, и читать трудно.)
 
 Посему, введём переменные для промежуточных результатов.
-
-Ну, а ещё - введение переменных - это подготовка мемоизации.
 
 ```{julia}
 #| output: false
@@ -201,16 +490,12 @@ function lcs_gen_impl2(i, j)
         r2 = Symbol("r_", i - 1, "_", j)
         quote
             if (s1[$i] == s2[$j])
-                let
-                    local $r0 = $(lcs_gen_impl2(i - 1, j - 1))
+                    $r0 = $(lcs_gen_impl2(i - 1, j - 1))
                     1 + $r0
-                end
             else
-                let
-                    local $r1 = $(lcs_gen_impl2(i, j - 1))
-                    local $r2 = $(lcs_gen_impl2(i - 1, j))
+                    $r1 = $(lcs_gen_impl2(i, j - 1))
+                    $r2 = $(lcs_gen_impl2(i - 1, j))
                     max($r1, $r2)
-                end
             end
         end
     end
@@ -223,20 +508,19 @@ end
 lcs_gen_impl2(2, 3) |> prettify
 ```
 
-Недостаток сгенерированной программы в том, что одни и те же выражения
-повторяются в программе несколько раз.
+<hr>
 
-## Оформляем как generated function
+Видно, что **одни и тех же выражения** в программе **повторяются
+несколько раз**. Это - нехорошо...
+
+## Оформляем `lcs_gen2` как `generated` function
 
 ```{julia}
 #| output: false
 @generated function lcs_gen2(::Val{i}, ::Val{j}, s1, s2) where {i,j}
     lcs_gen_impl2(i, j)
 end
-```
 
-```{julia}
-#| output: false
 function lcs_gen2(s1, s2)
     lcs_gen2(Val(length(s1)), Val(length(s2)), s1, s2)
 end
@@ -251,10 +535,12 @@ end
 @test lcs_gen2("ABC", "CBA") == 1
 ```
 
+# Мемоизация в процессе генерации программы
+
 ## Выносим присваивания из-под `if`
 
-Можно вынести присваивания из-под `if (s1[i] == s2[j])`. Тогда будут
-выполняться лишние вычисления, но асимптотика от этого не изменится.
+Подготовка к мемоизации! Теперь будут выполняться лишние вычисления, но
+**асимптотика** от этого **не изменится**.
 
 ```{julia}
 #| output: false
@@ -285,12 +571,13 @@ end
 lcs_gen_impl3(2, 3) |> prettify
 ```
 
-Теперь недостаток в том, что одно и то же выражение вычисляется и
-присваивается несколько раз.
+<hr>
 
-Кроме того, генерируются переменные, которым присваиваются константы.
+**Недостатки:** (1) Некоторые выражение вычисляется и присваивается
+несколько раз, (2) генерируются переменные, которым присваиваются
+константы.
 
-## Выделение общих подвыражений, подстановка констант
+## Мемоизация общих подвыражений, подстановка констант
 
 Можно решить эти две проблемы, заведя словарь, в котором будет
 регистрироваться, какие подвыражения уже вычислялись, а какие - нет.
@@ -315,7 +602,7 @@ function ass!(es, d, s::Symbol, e)
 end
 ```
 
-##
+## Мемоизация общих подвыражений, подстановка констант
 
 ```{julia}
 #| output: false
@@ -341,7 +628,7 @@ function lcs_gen_impl4!(es, d, i, j)
 end
 ```
 
-##
+## Мемоизация общих подвыражений, подстановка констант
 
 ```{julia}
 #| output: false
@@ -357,13 +644,18 @@ function lcs_gen_impl4(i, j)
 end
 ```
 
-##
+## Проверяем
 
 ```{julia}
 lcs_gen_impl4(2, 3) |> prettify
 ```
 
-##
+<hr>
+
+Теперь получилась "линейная программа": последовательность присваиваний,
+в которой каждая переменная получает значение только один раз.
+
+## Оформляем `lcs_gen4` как `generated` function
 
 ```{julia}
 #| output: false
@@ -387,14 +679,17 @@ end
 
 # Упрощение выражений через переписывание (`Metatheory.jl`)
 
+\
+
+- Устраняем сложения констант: `1 + 0`.
+- Упрощаем выражения: `max(0, y)`.
+
 ## Пакет `Metatheory.jl`: реализация правил переписывания
 
 ```{julia}
-using Metatheory, Metatheory.Rewriters
-```
-
-```{julia}
 #| output: false
+using Metatheory, Metatheory.Rewriters
+
 opt_rules = @theory x y begin
 
     x::Int64 + y::Int64 => x + y
@@ -403,14 +698,11 @@ opt_rules = @theory x y begin
     max(x, 0) --> x
 
 end
-```
 
-```{julia}
-#| output: false
 strategy = (#= Fixpoint ∘ =# Postwalk ∘ Chain)
 opt_expr(e) = strategy(opt_rules)(e)
 ```
-
+\
 ```{julia}
 @test opt_expr(:(2 + 3)) == 5
 @test opt_expr(:(max(10, 0))) == 10
@@ -418,17 +710,14 @@ opt_expr(e) = strategy(opt_rules)(e)
 @test opt_expr(:(true ? 1 + 2 : 3 + 4)) == :(true ? 3 : 7)
 ```
 
-##
+## Генерация программы с упрощениями
 
 ```{julia}
 #| output: false
 function ass_o!(es, d, s::Symbol, e)
     ass!(es, d, s, opt_expr(e))
 end
-```
 
-```{julia}
-#| output: false
 function lcs_gen_impl5!(es, d, i, j)
     r = Symbol("r_", i, "_", j)
 
@@ -451,7 +740,7 @@ function lcs_gen_impl5!(es, d, i, j)
 end
 ```
 
-##
+## Генерация программы с упрощениями
 
 ```{julia}
 #| output: false
@@ -467,31 +756,47 @@ function lcs_gen_impl5(i, j)
 end
 ```
 
-##
+## Проверяем
 
 ```{julia}
 lcs_gen_impl5(2, 3) |> prettify
 ```
 
-##
+<hr>
+
+Присваивания констант и лишние `max` исчезли!
+
+## Оформляем `lcs_gen5` как `generated` function
 
 ```{julia}
 #| output: false
 @generated function lcs_gen5(::Val{i}, ::Val{j}, s1, s2) where {i,j}
     lcs_gen_impl5(i, j)
 end
-```
 
-```{julia}
-#| output: false
 function lcs_gen5(s1, s2)
     lcs_gen5(Val(length(s1)), Val(length(s2)), s1, s2)
 end
 ```
-
+\
 ```{julia}
 @test lcs_gen5("ABC", "ACD") == 2
 # # The longest common subsequence is “GTAB”.
 @test lcs_gen5("AGGTAB", "GXTXAYB") == 4
 @test lcs_gen5("ABC", "CBA") == 1
 ```
+
+# Мудрые умозаключения
+
+## Выводы
+
+- Исходная программа - **рекурсивная**, но, после специализации,
+  получается **линейная** программа (которая, в частности, подходит для
+  FPGA).
+- В сгенерированной программе **нет явной мемоизации**, поскольку она
+  уже выполнена во время генерации.
+- В сгенерированной программе нет **лишних присваиваний** и устранены
+  **лишние операции**.
+- Качественную специализированную программу **не всегда** удаётся
+  получить с помощью "наивного" стадирования или "тупых" частичных
+  вычислений.

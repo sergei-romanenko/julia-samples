@@ -1,6 +1,7 @@
 # Custom Dictionary Words
 Aktemur
 calloc
+haskey
 invis
 isexpr
 isodd
@@ -22,6 +23,9 @@ tabset
 Taha
 underbrace
 Горнера
+мемоизацией
+мемоизации
+мемоизацию
 метапрограммирование
 метапрограммирования
 покомпилировали
