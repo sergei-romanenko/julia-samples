@@ -1,0 +1,46 @@
+/*-- scss:defaults --*/
+
+// $presentation-font-size-root: 40px;
+$presentation-font-size-root: 30px;
+
+// $code-block-font-size: 0.55em;
+$code-block-font-size: 0.7em;
+$code-block-bg: #f9f9f9;
+$code-block-border-color: #000000;
+
+/*-- scss:rules --*/
+
+/*
+div.cell-output.cell-output-stdout {
+    font-size: 100%;
+}
+
+div.cell-output.cell-output-display {
+    font-size: 100%;
+}
+ */
+
+ .title-slide.slide.level1 {
+    background-color: beige;
+}
+
+h1 {
+    font-family: cursive !important;
+}
+
+div.quarto-title-authors {
+    font-size: 1.6em;
+}
+
+.subtitle {
+    font-size: 1.6em;
+}
+
+div.quarto-title-authors {
+    font-size: 1.6em;
+}
+
+.cell .cell-output-display pre code {
+    max-height: 480px;
+    overflow-y: auto;
+  }

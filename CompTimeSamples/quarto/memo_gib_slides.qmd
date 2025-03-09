@@ -1,0 +1,316 @@
+---
+title: "Julia: стадирование и динамическое программирование"
+subtitle: (Числа "Гибоначчи")
+author: "Сергей Анатольевич Романенко"
+institute: "Институт им. М.В.Келдыша РАН"
+# date: today
+date: 2025-03-02
+title-slide-attributes:
+  data-background-color: "beige"
+format:
+  revealjs:
+    theme:
+      - default
+      - memo_gib_slides.scss
+    from: markdown+emoji
+    lang: ru-RU
+    code-fold: false
+    code-line-numbers: false
+    code-block-height: 680px
+    slide-number: true
+    # smaller: true
+    embed-resources: true
+    # chalkboard: true
+execute:
+  echo: true
+jupyter: julia-1.11
+---
+
+## Числи Фибоначчи
+
+```{julia}
+#| output: false
+fib(n) =
+    if n == 0
+        0
+    elseif n == 1
+        1
+    else
+        fib(n - 2) + fib(n - 1)
+    end
+```
+
+```{julia}
+Tuple(fib(n) for n in 0:10)
+```
+
+Проблема в том, что у `fib` - только один аргумент. А если мы хотим
+специализировать функцию по значениям некоторых аргументов, то этих
+аргументов должно быть ≥ 2.
+
+Посему, переходим к рассмотрению чисел "Гибоначчи".
+
+## Числи "Гибоначчи"
+
+```{julia}
+#| output: false
+gib(n, x, y) =
+    if n == 0
+        x
+    elseif n == 1
+        y
+    else
+        gib(n - 2, x, y) + gib(n - 1, x, y)
+    end
+```
+
+\
+
+```{julia}
+gib(10, 0, 1), gib(10, 2, 3)
+```
+
+## Мемоизация
+
+```{julia}
+#| output: false
+function gib_memo!(d, n, x, y)
+    haskey(d, n) && return d[n]
+
+    r =
+        if n == 0
+            x
+        elseif n == 1
+            y
+        else
+            gib_memo!(d, n - 2, x, y) + gib_memo!(d, n - 1, x, y)
+        end
+
+    @show n
+    d[n] = r
+end
+
+function gib_memo(n, x, y)
+    d = Dict{Int64,Int64}()
+    gib_memo!(d, n, x, y)
+end
+```
+
+## Мемоизация
+
+Проверяем.
+
+```{julia}
+gib_memo(10, 2, 3)
+```
+
+## Превращаем вычислитель в генератор
+
+```{julia}
+#| output: false
+function gib_gen!(d, es, n)
+    haskey(d, n) && return d[n]
+
+    d[n] =
+        if n == 0 (:x) elseif n == 1 (:y)
+        else
+            g = Symbol("g_", n)
+            push!(es,
+                :($g = $(gib_gen!(d, es, n - 2)) + $(gib_gen!(d, es, n - 1))))
+            g
+        end
+end
+
+function gib_gen(n)
+    d = Dict{Int64,Any}(); es = Expr[]
+    r = gib_gen!(d, es, n)
+
+    quote $(es...); $r end
+end
+```
+
+## Проверяем генератор
+
+```{julia}
+using MacroTools: prettify
+```
+
+Функция `prettify` используется для удаления "мусора" (номеров строк исходной
+программы).
+
+
+```{julia}
+gib_gen(0) |> prettify
+```
+
+```{julia}
+gib_gen(1) |> prettify
+```
+<!--
+```{julia}
+gib_gen(3) |> prettify
+```
+ -->
+
+```{julia}
+gib_gen(8) |> prettify
+```
+
+## Обёртываем `gib_gen` в генерирующую функцию
+
+```{julia}
+#| output: false
+@generated function gib_gen(::Val{n}, x, y) where {n}
+    gib_gen(n)
+end
+```
+\
+```{julia}
+gib_gen(Val(10), 2, 3)
+```
+
+# Использование комбинаторов
+
+## Классический `fix`
+
+Можно "упрятать" рекурсию в комбинатор `fix`.
+
+```{julia}
+#| output: false
+fix(f, x) = f(x1 -> fix(f, x1), x)
+```
+
+Тогда рекурсивную функцию можно превратить в (как бы) нерекурсивную.
+
+```{julia}
+#| output: false
+fib_step(self, n) =
+    if n == 0
+        0
+    elseif n == 1
+        1
+    else
+        self(n - 2) + self(n - 1)
+    end
+```
+
+И вызывать её с помощью `fix`.
+
+```{julia}
+fix(fib_step, 10)
+```
+
+Работает... Но выглядит как явное **извращение**! Зачем так делать?
+
+## Какая польза может быть от комбинаторов?
+
+Можно добавить а `fix` дополнительные действия, которые будут
+совершаться перед вызовом функции и после оного.
+
+```{julia}
+#| output: false
+function fix_trace(f, x)
+    println("Calling ", string(f), "(", x, ")")
+    r = f(x1 -> fix_trace(f, x1), x)
+    println("Returning ", string(f), "(", x, ") = ", r)
+    return r
+end
+```
+
+Проверяем.
+
+```{julia}
+fix_trace(fib_step, 3)
+```
+
+## А если "упрятать" в `fix` мемоизацию?
+
+А почему бы и нет? В результате получаем следующую пользу.
+
+- **Одно и то же определение функции** может исполняться как с
+  мемоизацией, так и без оной.
+- Один и тот же **механизм мемоизации** может использоваться для разных
+  функций.
+
+В частности, не меняя текст `fib_step`, можно будет проводить вычисления
+как с мемоизацией, так и без оной.
+
+## Реализация `fix_memo`
+
+```{julia}
+#| output: false
+function fix_memo(d, f, x)
+    haskey(d, x) && return d[x]
+
+    d[x] = f(x1 -> fix_memo(d, f, x1), x)
+end
+
+function fix_memo(f, x)
+    d = Dict()
+    fix_memo(d, f, x)
+end
+```
+
+Проверяем.
+
+```{julia}
+fix_memo(fib_step, 10)
+```
+
+# Определения `fix_trace` и `fix_memo` через `fix`
+
+\
+(Непонятно, есть ли в этом практический смысл? Но, с точки зрения науки,
+- любопытно...)
+
+## `fix_trace` через `fix`
+
+```{julia}
+#| output: false
+function trace_step(self, fx)
+    f = fx[1]
+    x = fx[2]
+    println("Calling ", string(f), "(", x, ")")
+    r = f(x1 -> self((f, x1)), x)
+    println("Returning ", string(f), "(", x, ") = ", r)
+    return r
+end
+```
+
+Проверяем.
+
+```{julia}
+fix(trace_step, (fib_step, 3))
+```
+
+## `fix_memo` через `fix`
+
+```{julia}
+#| output: false
+function mk_memo_step()
+    d = Dict()
+
+    (self, (f, x)) -> begin
+        haskey(d, x) && return d[x]
+        r = f(x1 -> self((f, x1)), x)
+        d[x] = r
+    end
+end
+```
+
+Проверяем.
+
+```{julia}
+fix(mk_memo_step(), (fib_step, 10))
+```
+
+## Композиция "инструментовок"
+
+```{julia}
+#| output: false
+fix2(g, f) = x -> f(x1 -> g(x2 -> fix2(g, f)(x2), x1), x)
+```
+
+```{julia}
+fix2(mk_memo_step(), trace_step)((fib_step, 3))
+```
