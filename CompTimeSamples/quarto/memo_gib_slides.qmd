@@ -4,7 +4,7 @@ subtitle: (Числа "Гибоначчи")
 author: "Сергей Анатольевич Романенко"
 institute: "Институт им. М.В.Келдыша РАН"
 # date: today
-date: 2025-03-02
+date: 2025-03-12
 title-slide-attributes:
   data-background-color: "beige"
 format:
@@ -26,7 +26,26 @@ execute:
 jupyter: julia-1.11
 ---
 
-## Числи Фибоначчи
+# Пререквизиты
+
+## Что будем использовать?
+
+```{julia}
+using Test
+```
+
+Пакет `Test` используется для "тестирования по частям" (unit testing).
+
+```{julia}
+using MacroTools: prettify
+```
+
+Функция `prettify` используется для удаления "мусора" (номеров строк
+исходной программы).
+
+# Подопытный кролик: числа "Гибоначчи"
+
+## Числа Фибоначчи
 
 ```{julia}
 #| output: false
@@ -50,7 +69,7 @@ Tuple(fib(n) for n in 0:10)
 
 Посему, переходим к рассмотрению чисел "Гибоначчи".
 
-## Числи "Гибоначчи"
+## Числа "Гибоначчи"
 
 ```{julia}
 #| output: false
@@ -64,10 +83,13 @@ gib(n, x, y) =
     end
 ```
 
-\
+Проверяем.
 
 ```{julia}
-gib(10, 0, 1), gib(10, 2, 3)
+@test Tuple(gib(n, 0, 1) for n in 0:10) ==
+      (0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55)
+@test Tuple(gib(n, 2, 3) for n in 0:10) ==
+      (2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233)
 ```
 
 ## Мемоизация
@@ -91,14 +113,14 @@ function gib_memo!(d, n, x, y)
 end
 
 function gib_memo(n, x, y)
-    d = Dict{Int64,Int64}()
-    gib_memo!(d, n, x, y)
+    gib_memo!(Dict(), n, x, y)
 end
 ```
 
-## Мемоизация
+Вставили `@show`, чтобы проверить, что `gib(n)` для каждого `n`
+вычисляется только один раз.
 
-Проверяем.
+## Мемоизация (проверка)
 
 ```{julia}
 gib_memo(10, 2, 3)
@@ -122,22 +144,14 @@ function gib_gen!(d, es, n)
 end
 
 function gib_gen(n)
-    d = Dict{Int64,Any}(); es = Expr[]
-    r = gib_gen!(d, es, n)
+    es = Expr[]
+    r = gib_gen!(Dict(), es, n)
 
     quote $(es...); $r end
 end
 ```
 
 ## Проверяем генератор
-
-```{julia}
-using MacroTools: prettify
-```
-
-Функция `prettify` используется для удаления "мусора" (номеров строк исходной
-программы).
-
 
 ```{julia}
 gib_gen(0) |> prettify
@@ -153,7 +167,7 @@ gib_gen(3) |> prettify
  -->
 
 ```{julia}
-gib_gen(8) |> prettify
+gib_gen(10) |> prettify
 ```
 
 ## Обёртываем `gib_gen` в генерирующую функцию
@@ -164,12 +178,22 @@ gib_gen(8) |> prettify
     gib_gen(n)
 end
 ```
-\
+Проверяем.
+
 ```{julia}
-gib_gen(Val(10), 2, 3)
+@test Tuple(gib_gen(Val(n), 2, 3) for n in 0:10) ==
+      (2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233)
 ```
 
 # Использование комбинаторов
+
+## Какая потенциальная польза?
+
+- Можно отделить мемоизацию от вычислений ("разделение аспектов").
+- Одно и то же определение функции может исполняться как с мемоизацией,
+  так и без оной.
+- Один и тот же механизм мемоизации может использоваться для разных
+  функций.
 
 ## Классический `fix`
 
@@ -177,27 +201,28 @@ gib_gen(Val(10), 2, 3)
 
 ```{julia}
 #| output: false
-fix(f, x) = f(x1 -> fix(f, x1), x)
+fix(f, xs...) = f((ys...) -> fix(f, ys...), xs...)
 ```
 
 Тогда рекурсивную функцию можно превратить в (как бы) нерекурсивную.
 
 ```{julia}
 #| output: false
-fib_step(self, n) =
+gib_step(self, n, x, y) =
     if n == 0
-        0
+        x
     elseif n == 1
-        1
+        y
     else
-        self(n - 2) + self(n - 1)
+        self(n - 2, x, y) + self(n - 1, x, y)
     end
 ```
 
 И вызывать её с помощью `fix`.
 
 ```{julia}
-fix(fib_step, 10)
+@test Tuple(fix(gib_step, n, 2, 3) for n in 0:10) ==
+      (2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233)
 ```
 
 Работает... Но выглядит как явное **извращение**! Зачем так делать?
@@ -209,10 +234,10 @@ fix(fib_step, 10)
 
 ```{julia}
 #| output: false
-function fix_trace(f, x)
-    println("Calling ", string(f), "(", x, ")")
-    r = f(x1 -> fix_trace(f, x1), x)
-    println("Returning ", string(f), "(", x, ") = ", r)
+function fix_trace(f, xs...)
+    println("Calling ", string(f), string(xs))
+    r = f((ys...) -> fix_trace(f, ys...), xs...)
+    println("Returning ", string(f), string(xs), " = ", r)
     return r
 end
 ```
@@ -220,7 +245,7 @@ end
 Проверяем.
 
 ```{julia}
-fix_trace(fib_step, 3)
+fix_trace(gib_step, 3, 2, 3)
 ```
 
 ## А если "упрятать" в `fix` мемоизацию?
@@ -239,22 +264,19 @@ fix_trace(fib_step, 3)
 
 ```{julia}
 #| output: false
-function fix_memo(d, f, x)
-    haskey(d, x) && return d[x]
-
-    d[x] = f(x1 -> fix_memo(d, f, x1), x)
+function fix_memo!(d, f, xs...)
+    haskey(d, xs) && d[xs]
+    d[xs] = f((ys...) -> fix_memo!(d, f, ys...), xs...)
 end
 
-function fix_memo(f, x)
-    d = Dict()
-    fix_memo(d, f, x)
-end
+fix_memo(f, xs...) = fix_memo!(Dict(), f, xs... )
 ```
 
 Проверяем.
 
 ```{julia}
-fix_memo(fib_step, 10)
+@test Tuple(fix_memo(gib_step, n, 2, 3) for n in 0:10) ==
+      (2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233)
 ```
 
 # Определения `fix_trace` и `fix_memo` через `fix`
@@ -267,12 +289,10 @@ fix_memo(fib_step, 10)
 
 ```{julia}
 #| output: false
-function trace_step(self, fx)
-    f = fx[1]
-    x = fx[2]
-    println("Calling ", string(f), "(", x, ")")
-    r = f(x1 -> self((f, x1)), x)
-    println("Returning ", string(f), "(", x, ") = ", r)
+function trace_step(self, f, xs...)
+    println("Calling ", string(f), string(xs))
+    r = f((ys...) -> self(f, ys...), xs...)
+    println("Returning ", string(f), string(xs), " = ", r)
     return r
 end
 ```
@@ -280,7 +300,7 @@ end
 Проверяем.
 
 ```{julia}
-fix(trace_step, (fib_step, 3))
+fix(trace_step, gib_step, 3, 2, 3)
 ```
 
 ## `fix_memo` через `fix`
@@ -290,10 +310,10 @@ fix(trace_step, (fib_step, 3))
 function mk_memo_step()
     d = Dict()
 
-    (self, (f, x)) -> begin
-        haskey(d, x) && return d[x]
-        r = f(x1 -> self((f, x1)), x)
-        d[x] = r
+    (self, f, xs...) -> begin
+        haskey(d, xs) && return d[xs]
+        r = f((ys...) -> self(f, ys...), xs...)
+        d[xs] = r
     end
 end
 ```
@@ -301,16 +321,21 @@ end
 Проверяем.
 
 ```{julia}
-fix(mk_memo_step(), (fib_step, 10))
+@test Tuple(fix(mk_memo_step(), gib_step, n, 2, 3) for n in 0:10) ==
+    (2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233)
 ```
 
 ## Композиция "инструментовок"
 
 ```{julia}
 #| output: false
-fix2(g, f) = x -> f(x1 -> g(x2 -> fix2(g, f)(x2), x1), x)
+fix2(g, f) =
+    (xs...) ->
+        f((ys...) ->
+                g((zs...) ->
+                        fix2(g, f)(zs...), ys...), xs...)
 ```
 
 ```{julia}
-fix2(mk_memo_step(), trace_step)((fib_step, 3))
+@test fix2(mk_memo_step(), trace_step)(gib_step, 3, 2, 3) == 8
 ```
