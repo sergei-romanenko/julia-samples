@@ -609,9 +609,7 @@ end
 function lcs_gen_impl4!(es, d, i, j)
     r = Symbol("r_", i, "_", j)
 
-    if haskey(d, r)
-        return d[r]
-    end
+    haskey(d, r) && return d[r]
 
     if (i == 0 || j == 0)
         ass!(es, d, r, 0)
@@ -702,7 +700,7 @@ end
 strategy = (#= Fixpoint ∘ =# Postwalk ∘ Chain)
 opt_expr(e) = strategy(opt_rules)(e)
 ```
-\
+Проверяем:
 ```{julia}
 @test opt_expr(:(2 + 3)) == 5
 @test opt_expr(:(max(10, 0))) == 10
@@ -721,9 +719,7 @@ end
 function lcs_gen_impl5!(es, d, i, j)
     r = Symbol("r_", i, "_", j)
 
-    if haskey(d, r)
-        return d[r]
-    end
+    haskey(d, r) && return d[r]
 
     if (i == 0 || j == 0)
         ass_o!(es, d, r, 0)
@@ -778,7 +774,7 @@ function lcs_gen5(s1, s2)
     lcs_gen5(Val(length(s1)), Val(length(s2)), s1, s2)
 end
 ```
-\
+Проверяем:
 ```{julia}
 @test lcs_gen5("ABC", "ACD") == 2
 # # The longest common subsequence is “GTAB”.
