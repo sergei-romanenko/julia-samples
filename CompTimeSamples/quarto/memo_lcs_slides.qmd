@@ -5,9 +5,9 @@ author: "Сергей Анатольевич Романенко"
 institute: "Институт им. М.В.Келдыша РАН"
 # date: today
 date: 2025-03-01
-# bibliography: shonan_hmm_slides.bib
+bibliography: memo_lcs_slides.bib
 # csl: nature-no-superscript.csl
-title-slide-attributes: 
+title-slide-attributes:
   data-background-color: "beige"
 format:
   revealjs:
@@ -18,12 +18,12 @@ format:
     lang: ru-RU
     code-fold: false
     code-line-numbers: false
-    code-block-height: 680px
+    code-block-height: 640px
     slide-number: true
     # smaller: true
     embed-resources: true
     # chalkboard: true
-execute: 
+execute:
   echo: true
 jupyter: julia-1.11
 ---
@@ -360,7 +360,7 @@ using Test
 
 ```{julia}
 #| output: false
-function lcs_memo(i, j, d, s1, s2)
+function lcs_memo(d, i, j, s1, s2)
     haskey(d, (i, j)) && return d[(i, j)]
 
     r =
@@ -368,9 +368,9 @@ function lcs_memo(i, j, d, s1, s2)
             0
         else
             if (s1[i] == s2[j])
-                1 + lcs_memo(i - 1, j - 1, d, s1, s2)
+                1 + lcs_memo(d, i - 1, j - 1, s1, s2)
             else
-                max(lcs_memo(i, j - 1, d, s1, s2), lcs_memo(i - 1, j, d, s1, s2))
+                max(lcs_memo(d, i, j - 1, s1, s2), lcs_memo(d, i - 1, j, s1, s2))
             end
         end
 
@@ -379,7 +379,7 @@ end
 
 function lcs_memo(s1, s2)
     d = Dict{Tuple{Int,Int},Int}()
-    lcs_memo(length(s1), length(s2), d, s1, s2)
+    lcs_memo(d, length(s1), length(s2), s1, s2)
 end
 ```
 
@@ -398,7 +398,8 @@ end
 
 ## Источники вдохновения
 
-- Peter Thiemann. 1999. **Combinators for program generation.** J.
+<!--
+ - Peter Thiemann. 1999. **Combinators for program generation.** J.
   Funct. Program. 9, 5 (September 1999), 483–525.
   <https://doi.org/10.1017/S0956796899003469>
 
@@ -417,6 +418,10 @@ end
   international conference on Functional and Logic Programming
   (FLOPS'10). Springer-Verlag, Berlin, Heidelberg, 304–320.
   <https://doi.org/10.1007/978-3-642-12251-4_22>
+ -->
+
+::: {#refs}
+:::
 
 ## "Наивный" генератор.
 
@@ -426,15 +431,15 @@ end
 
 ```{julia}
 #| output: false
-function lcs_gen_impl1(i, j)
+function lcs_gen_impl_n(i, j)
     if (i == 0 || j == 0)
         0
     else
         quote
             if (s1[$i] == s2[$j])
-                1 + $(lcs_gen_impl1(i - 1, j - 1))
+                1 + $(lcs_gen_impl_n(i - 1, j - 1))
             else
-                max($(lcs_gen_impl1(i, j - 1)), $(lcs_gen_impl1(i - 1, j)))
+                max($(lcs_gen_impl_n(i, j - 1)), $(lcs_gen_impl_n(i - 1, j)))
             end
         end
     end
@@ -442,7 +447,7 @@ end
 ```
 
 
-## Результат вычисления `lcs_gen_impl1(2, 3)`
+## Вычисляем `lcs_gen_impl_n(2, 3)`
 
 Функция `prettify` используется для очистки генерируемого кода от
 "мусора" (ссылок на номера строк в программе-генераторе).
@@ -451,50 +456,52 @@ end
 using MacroTools: prettify
 ```
 
-Теперь посмотрим, что сгенерируется при вызове `lcs_gen_impl1(2, 3)`.
-
-```julia
-lcs_gen_impl1(2, 3) |> prettify
-```
-(Смотрим следующий слайд.)
-
-## Результат вычисления `lcs_gen_impl1(2, 3)`
-
-<hr>
+Теперь посмотрим, что сгенерируется при вызове `lcs_gen_impl_n(2, 3)`.
 
 ```{julia}
-#| echo: false
-lcs_gen_impl1(2, 3) |> prettify
+#| echo: true
+#| output-location: slide
+lcs_gen_impl_n(2, 3) |> prettify
 ```
 
-<hr>
+**(Смотрим следующий слайд.)**
 
 Получается одно громадное выражение, в котором есть
 совпадающие подвыражения.
 
 ## Промежуточные переменные
 
-Не очень хорошо, когда выражения получаются слишком большими. (Это может
-"взорвать" компилятор, и читать трудно.)
-
-Посему, введём переменные для промежуточных результатов.
+- Не очень хорошо, когда выражения получаются слишком большими. (Это
+  может "взорвать" компилятор, и читать трудно.)
+- Посему, введём переменные для промежуточных результатов.
+- Выражение, вырабатывающее результат для каждой комбинации `i` и `j`
+  будем присваивать переменной `r_i_j`.
+- Для генерации имён переменных (в виде символов) определим функцию
+  `ij2var`.
 
 ```{julia}
 #| output: false
-function lcs_gen_impl2(i, j)
+ij2var(i, j) = Symbol("r_", i, "_", j)
+```
+
+## Промежуточные переменные
+
+```{julia}
+#| output: false
+function lcs_gen_impl_v(i, j)
     if (i == 0 || j == 0)
         0
     else
-        r0 = Symbol("r_", i - 1, "_", j - 1)
-        r1 = Symbol("r_", i, "_", j - 1)
-        r2 = Symbol("r_", i - 1, "_", j)
+        r0 = ij2var(i - 1, j - 1)
+        r1 = ij2var(i, j - 1)
+        r2 = ij2var(i - 1, j)
         quote
             if (s1[$i] == s2[$j])
-                    $r0 = $(lcs_gen_impl2(i - 1, j - 1))
+                    $r0 = $(lcs_gen_impl_v(i - 1, j - 1))
                     1 + $r0
             else
-                    $r1 = $(lcs_gen_impl2(i, j - 1))
-                    $r2 = $(lcs_gen_impl2(i - 1, j))
+                    $r1 = $(lcs_gen_impl_v(i, j - 1))
+                    $r2 = $(lcs_gen_impl_v(i - 1, j))
                     max($r1, $r2)
             end
         end
@@ -505,7 +512,7 @@ end
 ## Проверяем
 
 ```{julia}
-lcs_gen_impl2(2, 3) |> prettify
+lcs_gen_impl_v(2, 3) |> prettify
 ```
 
 <hr>
@@ -513,26 +520,26 @@ lcs_gen_impl2(2, 3) |> prettify
 Видно, что **одни и тех же выражения** в программе **повторяются
 несколько раз**. Это - нехорошо...
 
-## Оформляем `lcs_gen2` как `generated` function
+## Оформляем `lcs_gen_v` как `generated` function
 
 ```{julia}
 #| output: false
-@generated function lcs_gen2(::Val{i}, ::Val{j}, s1, s2) where {i,j}
-    lcs_gen_impl2(i, j)
+@generated function lcs_gen_v(::Val{i}, ::Val{j}, s1, s2) where {i,j}
+    lcs_gen_impl_v(i, j)
 end
 
-function lcs_gen2(s1, s2)
-    lcs_gen2(Val(length(s1)), Val(length(s2)), s1, s2)
+function lcs_gen_v(s1, s2)
+    lcs_gen_v(Val(length(s1)), Val(length(s2)), s1, s2)
 end
 ```
 
 Проверяем
 
 ```{julia}
-@test lcs_gen2("ABC", "ACD") == 2
+@test lcs_gen_v("ABC", "ACD") == 2
 # The longest common subsequence is “GTAB”.
-# @test lcs_gen2("AGGTAB", "GXTXAYB") == 4
-@test lcs_gen2("ABC", "CBA") == 1
+# @test lcs_gen_v("AGGTAB", "GXTXAYB") == 4
+@test lcs_gen_v("ABC", "CBA") == 1
 ```
 
 # Мемоизация в процессе генерации программы
@@ -540,21 +547,22 @@ end
 ## Выносим присваивания из-под `if`
 
 Подготовка к мемоизации! Теперь будут выполняться лишние вычисления, но
-**асимптотика** от этого **не изменится**.
+**асимптотика** от этого **не изменится** (но программу будет легче
+распараллеливать).
 
 ```{julia}
 #| output: false
-function lcs_gen_impl3(i, j)
+function lcs_gen_impl_u(i, j)
     if (i == 0 || j == 0)
         0
     else
-        r0 = Symbol("r_", i - 1, "_", j - 1)
-        r1 = Symbol("r_", i, "_", j - 1)
-        r2 = Symbol("r_", i - 1, "_", j)
+        r0 = ij2var(i - 1, j - 1)
+        r1 = ij2var(i, j - 1)
+        r2 = ij2var(i - 1, j)
         quote
-            $r0 = $(lcs_gen_impl3(i - 1, j - 1))
-            $r1 = $(lcs_gen_impl3(i, j - 1))
-            $r2 = $(lcs_gen_impl3(i - 1, j))
+            $r0 = $(lcs_gen_impl_u(i - 1, j - 1))
+            $r1 = $(lcs_gen_impl_u(i, j - 1))
+            $r2 = $(lcs_gen_impl_u(i - 1, j))
             if (s1[$i] == s2[$j])
                 1 + $r0
             else
@@ -568,7 +576,7 @@ end
 ## Проверяем
 
 ```{julia}
-lcs_gen_impl3(2, 3) |> prettify
+lcs_gen_impl_u(2, 3) |> prettify
 ```
 
 <hr>
@@ -597,8 +605,8 @@ end
 
 function ass!(es, d, s::Symbol, e)
     haskey(d, s) && return
-    d[s] = s
     push!(es, :($s = $e))
+    d[s] = s
 end
 ```
 
@@ -606,23 +614,21 @@ end
 
 ```{julia}
 #| output: false
-function lcs_gen_impl4!(es, d, i, j)
-    r = Symbol("r_", i, "_", j)
+function lcs_gen_impl_c!(es, d, i, j)
+    r = ij2var(i, j)
 
     haskey(d, r) && return d[r]
 
     if (i == 0 || j == 0)
         ass!(es, d, r, 0)
     else
-        r0 = lcs_gen_impl4!(es, d, i - 1, j - 1)
-        r1 = lcs_gen_impl4!(es, d, i, j - 1)
-        r2 = lcs_gen_impl4!(es, d, i - 1, j)
+        r0 = lcs_gen_impl_c!(es, d, i - 1, j - 1)
+        r1 = lcs_gen_impl_c!(es, d, i, j - 1)
+        r2 = lcs_gen_impl_c!(es, d, i - 1, j)
         ass!(es, d, r, :(
             s1[$i] == s2[$j] ? 1 + $r0 : max($r1, $r2)
         ))
     end
-
-    return d[r]
 end
 ```
 
@@ -630,22 +636,19 @@ end
 
 ```{julia}
 #| output: false
-function lcs_gen_impl4(i, j)
+function lcs_gen_impl_c(i, j)
     es = Expr[]
     d = Dict{Symbol,Any}()
-    r = lcs_gen_impl4!(es, d, i, j)
+    r = lcs_gen_impl_c!(es, d, i, j)
 
-    quote
-        $(es...)
-        return $r
-    end
+    quote $(es...); $r end
 end
 ```
 
 ## Проверяем
 
 ```{julia}
-lcs_gen_impl4(2, 3) |> prettify
+lcs_gen_impl_c(2, 3) |> prettify
 ```
 
 <hr>
@@ -653,26 +656,26 @@ lcs_gen_impl4(2, 3) |> prettify
 Теперь получилась "линейная программа": последовательность присваиваний,
 в которой каждая переменная получает значение только один раз.
 
-## Оформляем `lcs_gen4` как `generated` function
+## Оформляем `lcs_gen_c` как `generated` function
 
 ```{julia}
 #| output: false
-@generated function lcs_gen4(::Val{i}, ::Val{j}, s1, s2) where {i,j}
-    lcs_gen_impl4(i, j)
+@generated function lcs_gen_c(::Val{i}, ::Val{j}, s1, s2) where {i,j}
+    lcs_gen_impl_c(i, j)
 end
 
-function lcs_gen4(s1, s2)
-    lcs_gen4(Val(length(s1)), Val(length(s2)), s1, s2)
+function lcs_gen_c(s1, s2)
+    lcs_gen_c(Val(length(s1)), Val(length(s2)), s1, s2)
 end
 ```
 
 Проверяем:
 
 ```{julia}
-@test lcs_gen4("ABC", "ACD") == 2
+@test lcs_gen_c("ABC", "ACD") == 2
 # The longest common subsequence is “GTAB”.
-@test lcs_gen4("AGGTAB", "GXTXAYB") == 4
-@test lcs_gen4("ABC", "CBA") == 1
+@test lcs_gen_c("AGGTAB", "GXTXAYB") == 4
+@test lcs_gen_c("ABC", "CBA") == 1
 ```
 
 # Упрощение выражений через переписывание (`Metatheory.jl`)
@@ -691,7 +694,7 @@ using Metatheory, Metatheory.Rewriters
 opt_rules = @theory x y begin
 
     x::Int64 + y::Int64 => x + y
-
+    # We know that x >= 0 and y >= 0 !
     max(0, y) --> y
     max(x, 0) --> x
 
@@ -716,23 +719,21 @@ function ass_o!(es, d, s::Symbol, e)
     ass!(es, d, s, opt_expr(e))
 end
 
-function lcs_gen_impl5!(es, d, i, j)
-    r = Symbol("r_", i, "_", j)
+function lcs_gen_impl_o!(es, d, i, j)
+    r = ij2var(i, j)
 
     haskey(d, r) && return d[r]
 
     if (i == 0 || j == 0)
         ass_o!(es, d, r, 0)
     else
-        r0 = lcs_gen_impl5!(es, d, i - 1, j - 1)
-        r1 = lcs_gen_impl5!(es, d, i, j - 1)
-        r2 = lcs_gen_impl5!(es, d, i - 1, j)
+        r0 = lcs_gen_impl_o!(es, d, i - 1, j - 1)
+        r1 = lcs_gen_impl_o!(es, d, i, j - 1)
+        r2 = lcs_gen_impl_o!(es, d, i - 1, j)
         ass_o!(es, d, r, :(
             s1[$i] == s2[$j] ? 1 + $r0 : max($r1, $r2)
         ))
     end
-
-    return d[r]
 end
 ```
 
@@ -740,14 +741,13 @@ end
 
 ```{julia}
 #| output: false
-function lcs_gen_impl5(i, j)
+function lcs_gen_impl_o(i, j)
     es = Expr[]
     d = Dict{Symbol,Any}()
-    r = lcs_gen_impl5!(es, d, i, j)
+    r = lcs_gen_impl_o!(es, d, i, j)
 
     quote
-        $(es...)
-        return $r
+        $(es...); $r
     end
 end
 ```
@@ -755,31 +755,31 @@ end
 ## Проверяем
 
 ```{julia}
-lcs_gen_impl5(2, 3) |> prettify
+lcs_gen_impl_o(2, 3) |> prettify
 ```
 
 <hr>
 
 Присваивания констант и лишние `max` исчезли!
 
-## Оформляем `lcs_gen5` как `generated` function
+## Оформляем `lcs_gen_o` как `generated` function
 
 ```{julia}
 #| output: false
-@generated function lcs_gen5(::Val{i}, ::Val{j}, s1, s2) where {i,j}
-    lcs_gen_impl5(i, j)
+@generated function lcs_gen_o(::Val{i}, ::Val{j}, s1, s2) where {i,j}
+    lcs_gen_impl_o(i, j)
 end
 
-function lcs_gen5(s1, s2)
-    lcs_gen5(Val(length(s1)), Val(length(s2)), s1, s2)
+function lcs_gen_o(s1, s2)
+    lcs_gen_o(Val(length(s1)), Val(length(s2)), s1, s2)
 end
 ```
 Проверяем:
 ```{julia}
-@test lcs_gen5("ABC", "ACD") == 2
+@test lcs_gen_o("ABC", "ACD") == 2
 # # The longest common subsequence is “GTAB”.
-@test lcs_gen5("AGGTAB", "GXTXAYB") == 4
-@test lcs_gen5("ABC", "CBA") == 1
+@test lcs_gen_o("AGGTAB", "GXTXAYB") == 4
+@test lcs_gen_o("ABC", "CBA") == 1
 ```
 
 # Мудрые умозаключения
@@ -796,3 +796,287 @@ end
 - Качественную специализированную программу **не всегда** удаётся
   получить с помощью "наивного" стадирования или "тупых" частичных
   вычислений.
+
+# Попрание принципов стадирования
+
+## Основные принципы стадирования
+
+- К программе добавляются аннотации, которые говорят о том, на каком
+  этапе должны исполняться разные части программы.
+- Непротиворечивость аннотаций проверяется автоматически.
+- Если стереть аннотации, то получается правильная программа.
+- Программу можно исполнить двумя способами.
+  1. Стираем аннотации и исполняем программу.
+  2. Исполняем программу в два приёма.
+     - На первом этапе генерируется остаточная программа.
+     - На втором этапе остаточная программа исполняется.
+
+<hr>
+
+Но имеются и **дополнительные** принципы:
+
+- Всё должно быть написано **чисто функционально**.
+- **Нельзя "заглядывать"** (inspect) в генерируемый код.
+
+## Проблемы из-за "чистой функциональности"
+
+Под "чистой функциональностью" обычно понимают запрет на использование
+**изменяемых данных**.
+
+- Часто требуется работать с глобальными состояниями. Например, при
+  генерации уникальных имён переменных. Поэтому, ради стадирования, программу **приходится переделывать** в чисто функциональную.
+- Глобальный состояния приходится "продёргивать" через параметры и
+  результаты функций. Получается, что (формально) программа написана как
+  функциональная, но, на самом деле, является императивной.
+
+## Как преодолеть проблемы из-за "чистой функциональности"?
+
+- Чтобы замаскировать императивную сущность программы приходится
+используются "комбинаторы" и "монады".
+- Ради стадирования приходится переписывать исходную программу. И часто программа, которая была простой и понятной, становится загадочной.
+- Но зато на эту тему изготовлено много статей и диссертаций: :smile:
+  @Thiemann1999, @Taha2004, @Kiselyov2004methodology, @Swadi2005
+  @Kiselyov2010, @Aktemur2013, @Kameyama2009, @Kiselyov2018.
+
+Но при изготовлении генераторов программ "вручную" можно просто-напросто
+использовать **изменяемые данные** (там, где это удобно).
+
+## Проблемы из-за запрета заглядывать в код
+
+- Если писать программу "наивно" и "прямолинейно", то часто возникают случаи, когда код можно упростить. Например, `x * 0` заменить на `0`.
+- Чтобы повысить качество кода, есть две возможности.
+  1. Вставить в программу дополнительные вычисления, чтобы она
+     формулировала и отслеживала разные утверждения по поводу кода. При
+     исполнении эти вычисления, как правило, замедляют работу программы.
+     Но при стадированном исполнении их можно выполнить на первом этапе
+     \- и убрать из программы.
+  2. Генерировать код "наивно" - и тут же подчищать его. Но это запрещено в соответствии с принципами стадирования!
+
+## Преодоление ограничений: "абстрактная интерпретация"
+
+- К генерируемому коду присоединяется дополнительная информация (например, является ли значение выражения нулём). И эта информация используется для улучшения сгенерированного кода.
+- Этот метод в статьях по стадированию часто называют "абстрактной" интерпретацией. Это противоречит здравому смыслу. "Абстрактное" значение должно получаться за счёт **утраты** части информации, содержащейся в "конкретном" значении, а при стадировании к сгенерированном коду дополнительная информация - **добавляется**.
+- При изготовлении генератора программ вручную, можно просто-напросто
+  заглядывать в куски изготавливаемого кода и извлекать информацию из
+  них напрямую.
+
+## Преодоление ограничений: постпроцессор
+
+- В некоторых статьях по стадированию, исходная программа написана на
+  MetaOCaml, а конечная программа (в виде последовательности
+  присваиваний) приводится на C++. Перевод с MetaOCaml на C++ делается
+  **постпроцессором** (который тихонько подчищает грязь в программе).
+- Такой подход является **жульничеством**! Сначала запрещаем заглядывать
+  в генерируемый код, а потом (тайком) делаем это в постпроцессоре.
+- Если заглядывать в порождаемый код в конкретном генераторе программ,
+  то требуется реализовать только **ограниченное** количество
+  "подчисток". И многие из них возможны благодаря тому, что имеется
+  некоторая **дополнительная информация**. Например, `max(0, x)` можно
+  заменять на `x`, если известно, что `x` - не отрицательный.
+- Постпроцессор имеет смысл делать только если он будет работать со
+  **многими** генераторами. Но тогда - он должен быть сложным и
+  "универсальным". Но **не сможет** упрощать выражения вроде
+  `max(0, x)`!
+
+## Выводы
+
+- "Правильное" стадирование основано на некоторых принципах, которые, в
+  теории, выглядят красиво и привлекательно.
+- Однако, "гладко было на бумаге - да забыли про овраги"! Поэтому,
+  авторы этих принципов придумали несколько приёмов, с помощью которых
+  можно лицемерно обходить эти принципы.
+-  При изготовлении генераторов программ "вручную", часто бывает выгодно
+   отклоняться от этих приципов.
+
+# Использование комбинаторов для генерации программ
+
+- Можно **отделить** мемоизацию от генерации ("разделение аспектов").
+- Генератор можно заставить работать как с мемоизацией, так и **без
+  неё**.
+- Реализацию мемоизации можно использовать для **разных** генераторов.
+
+## Классический `fix`
+
+Можно "упрятать" рекурсию в комбинатор `fix`.
+
+```{julia}
+#| output: false
+fix(f, xs...) = f((ys...) -> fix(f, ys...), xs...)
+```
+
+Тогда рекурсивную функцию можно превратить в (как бы) нерекурсивную.
+
+```{julia}
+#| output: false
+gib_step(self, n, x, y) =
+    if n == 0
+        x
+    elseif n == 1
+        y
+    else
+        self(n - 2, x, y) + self(n - 1, x, y)
+    end
+```
+
+И вызывать её с помощью `fix`.
+
+```{julia}
+@test Tuple(fix(gib_step, n, 2, 3) for n in 0:10) ==
+      (2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233)
+```
+
+Работает... Но выглядит как явное **извращение**! Зачем так делать?
+
+## Оператор неподвижной точки с мемоизацией
+
+Добавляем в классический `fix` дополнительные параметры (и действия).
+
+- `es` - список присваиваний.
+- `xs2var` - функция, которая выдаёт имя переменной на основе `xs`.
+- `step` - "шаг" генерации.
+
+```{julia}
+#| output: false
+function fix_gen!(es, xs2var, step, xs...)
+    e = step((ys...) -> fix_gen!(es, xs2var, step, ys...), xs...)
+    r = xs2var(xs...)
+    push!(es, :($r = $e))
+    r
+end
+
+function fix_gen(xs2var, step, xs...)
+    es = Expr[]
+    e = fix_gen!(es, xs2var, step, xs...)
+    quote $(es...); $e end
+end
+```
+
+## "Шаг" генерации
+
+```{julia}
+#| output: false
+function lcs_gen_step(self, i, j)
+    if (i == 0 || j == 0)
+        0
+    else
+        r0 = self(i - 1, j - 1)
+        r1 = self(i, j - 1)
+        r2 = self(i - 1, j)
+        :(s1[$i] == s2[$j] ? 1 + $r0 : max($r1, $r2))
+    end
+end
+```
+
+Проверяем. (Результат - следующий слайд. ⬇️)
+
+```{julia}
+#| output-location: slide
+fix_gen(ij2var, lcs_gen_step, 2, 3) |> prettify
+```
+
+## Вынос мемоизации в комбинатор
+
+```{julia}
+#| output: false
+function fix_gen_memo!(d, es, key, step, xs...)
+    r = key(xs...)
+    haskey(d, r) && return d[r]
+    e = step((ys...) -> fix_gen_memo!(d, es, key, step, ys...), xs...)
+    push!(es, :($r = $e))
+    d[r] = r
+end
+
+function fix_gen_memo(key, step, xs...)
+    es = Expr[]
+    e = fix_gen_memo!(Dict(), es, key, step, xs...)
+    quote $(es...); $e end
+end
+```
+
+Проверяем. (Результат - следующий слайд. ⬇️)
+
+```{julia}
+#| output-location: slide
+fix_gen_memo(ij2var, lcs_gen_step, 2, 3) |> prettify
+```
+## Распространение констант
+
+```{julia}
+#| output: false
+function fix_gen_memo_c!(d, es, key, step, xs...)
+    r = key(xs...)
+    haskey(d, r) && return d[r]
+    e = step((ys...) -> fix_gen_memo_c!(d, es, key, step, ys...), xs...)
+    ass!(es, d, r, e)
+end
+
+function fix_gen_memo_c(key, step, xs...)
+    es = Expr[]
+    e = fix_gen_memo_c!(Dict(), es, key, step, xs...)
+    quote $(es...); $e end
+end
+```
+
+Проверяем. (Результат - следующий слайд. ⬇️)
+
+```{julia}
+#| output-location: slide
+fix_gen_memo_c(ij2var, lcs_gen_step, 2, 3) |> prettify
+```
+
+## Оптимизация выражений
+
+
+```{julia}
+#| output: false
+function fix_gen_memo_o!(d, es, key, step, xs...)
+    r = key(xs...)
+    haskey(d, r) && return d[r]
+    e = step((ys...) -> fix_gen_memo_o!(d, es, key, step, ys...), xs...)
+    ass!(es, d, r, opt_expr(e))
+end
+
+function fix_gen_memo_o(key, step, xs...)
+    es = Expr[]
+    e = fix_gen_memo_o!(Dict(), es, key, step, xs...)
+    quote $(es...); $e end
+end
+```
+
+Проверяем. (Результат - следующий слайд. ⬇️)
+
+```{julia}
+#| output-location: slide
+fix_gen_memo_o(ij2var, lcs_gen_step, 2, 3) |> prettify
+```
+
+## Оформляем как генерирующую функцию
+
+```{julia}
+#| output: false
+@generated function lcs_fix_gen_o(::Val{i}, ::Val{j}, s1, s2) where {i,j}
+    fix_gen_memo_o(ij2var, lcs_gen_step, i, j)
+end
+
+function lcs_fix_gen_o(s1, s2)
+    lcs_fix_gen_o(Val(length(s1)), Val(length(s2)), s1, s2)
+end
+```
+
+Проверяем.
+
+```{julia}
+@test lcs_fix_gen_o("ABC", "ACD") == 2
+# # The longest common subsequence is “GTAB”.
+@test lcs_fix_gen_o("AGGTAB", "GXTXAYB") == 4
+@test lcs_fix_gen_o("ABC", "CBA") == 1
+```
+
+## Выводы
+
+- Комбинаторы позволяют "выносить за скобки" механизмы мемоизации и
+  "подчистки" выражений.
+- Комбинаторы прекрасно сочетаются с использованием изменяемых данных.
+- Не обязательно всё укладывать в "прокрустово ложе" канонических
+  комбинаторов: можно (без труда) создавать специализированные
+  комбинаторы под конкретные ситуации.
