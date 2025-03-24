@@ -7,6 +7,8 @@ institute: "Институт им. М.В.Келдыша РАН"
 date: 2025-03-01
 bibliography: memo_lcs_slides.bib
 # csl: nature-no-superscript.csl
+# csl: acm-sig-proceedings.csl
+csl: computing-surveys.csl
 title-slide-attributes:
   data-background-color: "beige"
 format:
@@ -15,7 +17,7 @@ format:
       - default
       - memo_lcs_slides.scss
     from: markdown+emoji
-    lang: ru-RU
+    # lang: ru-RU
     code-fold: false
     code-line-numbers: false
     code-block-height: 640px
@@ -41,7 +43,7 @@ jupyter: julia-1.11
 
 В общем случае, строка длины $n$ имеет $2^n$ подпоследовательностей.
 
-\
+<br>
 **Задача.**
 
 > **Заданы две строки s1 и s2. Требуется найти длину самой длинной общей
@@ -250,7 +252,9 @@ v7 [ label="B" ]
 ```
 
 # Рекурсивный алгоритм
-\
+
+<br>
+
 **Время - $O(2^{\min(m,n)})$, память - $O(\min(m, n))$**
 
 ## "Разделяй и властвуй"
@@ -351,30 +355,69 @@ using Test
 Получается то, что надо...
 
 # Мемоизация
-\
+
+<br>
+
 **Время - $O(m * n)$, память - $O(m * n)$.**
+
+## "Динамическое программирование"
+
+
+```{dot}
+//| echo: false
+//| fig-width: 4.3
+//| fig-align: center
+digraph {
+  rankdir=TD
+  ranksep="0.7"
+  nodesep="0.4"
+
+node [ fontsize=20 ]
+node [ shape=box ]
+
+Problem [ label="Задача" ]
+Subproblem1 [ label="Подзадача 1"]
+Subproblem2 [ label="Подзадача 2"]
+
+node [ shape=box style=rounded ]
+Solution1 [ label="Решение 1"]
+Solution2 [ label="Решение 2"]
+Solution [ label="Решение"]
+Combine12 [ label="" shape=circle fixedsize=true width=0.5]
+
+Problem -> Subproblem1 [ style=dashed ]
+Subproblem1 -> Solution1
+
+Problem -> Subproblem2 [ style=dashed ]
+Subproblem2 -> Solution2
+
+Solution1 -> Combine12
+Solution2 -> Combine12
+
+Combine12 -> Solution
+}
+```
+
 
 ## Рекурсивный алгоритм с мемоизацией
 
-<!-- Время - $O(m * n)$, память - $O(m * n)$. -->
+Время - $O(m * n)$, память - $O(m * n)$.
 
 ```{julia}
 #| output: false
 function lcs_memo(d, i, j, s1, s2)
     haskey(d, (i, j)) && return d[(i, j)]
 
-    r =
-        if (i == 0 || j == 0)
-            0
+    if (i == 0 || j == 0)
+        d[(i, j)] = 0
+    else
+        if (s1[i] == s2[j])
+            d[(i, j)] = 1 + lcs_memo(d, i - 1, j - 1, s1, s2)
         else
-            if (s1[i] == s2[j])
-                1 + lcs_memo(d, i - 1, j - 1, s1, s2)
-            else
-                max(lcs_memo(d, i, j - 1, s1, s2), lcs_memo(d, i - 1, j, s1, s2))
-            end
+            d[(i, j)] = max(lcs_memo(d, i, j - 1, s1, s2),
+                            lcs_memo(d, i - 1, j, s1, s2))
         end
-
-    d[(i, j)] = r; return r
+    end
 end
 
 function lcs_memo(s1, s2)
@@ -398,28 +441,6 @@ end
 
 ## Источники вдохновения
 
-<!--
- - Peter Thiemann. 1999. **Combinators for program generation.** J.
-  Funct. Program. 9, 5 (September 1999), 483–525.
-  <https://doi.org/10.1017/S0956796899003469>
-
-- Kedar Swadi, Walid Taha, Oleg Kiselyov. 2005. **Staging dynamic
-  programming algorithms**. Unpublished manuscript (April 2005),
-  available from: <http://www.cs.rice.edu/~taha/publications.html>.
-
-- Yukiyoshi Kameyama, Oleg Kiselyov, and Chung-chieh Shan. 2009.
-  **Shifting the stage: staging with delimited control.** In Proceedings
-  of the 2009 ACM SIGPLAN workshop on Partial evaluation and program
-  manipulation (PEPM '09). Association for Computing Machinery, New
-  York, NY, USA, 111–120. <https://doi.org/10.1145/1480945.1480962>
-
-- Oleg Kiselyov. 2010. **Delimited control in OCaml, abstractly and
-  concretely: system description.** In Proceedings of the 10th
-  international conference on Functional and Logic Programming
-  (FLOPS'10). Springer-Verlag, Berlin, Heidelberg, 304–320.
-  <https://doi.org/10.1007/978-3-642-12251-4_22>
- -->
-
 ::: {#refs}
 :::
 
@@ -435,13 +456,13 @@ function lcs_gen_impl_n(i, j)
     if (i == 0 || j == 0)
         0
     else
-        quote
+        :(
             if (s1[$i] == s2[$j])
                 1 + $(lcs_gen_impl_n(i - 1, j - 1))
             else
                 max($(lcs_gen_impl_n(i, j - 1)), $(lcs_gen_impl_n(i - 1, j)))
             end
-        end
+        )
     end
 end
 ```
@@ -464,7 +485,7 @@ using MacroTools: prettify
 lcs_gen_impl_n(2, 3) |> prettify
 ```
 
-**(Смотрим следующий слайд.)**
+**(Смотрим следующий слайд. :arrow_down:)**
 
 Получается одно громадное выражение, в котором есть
 совпадающие подвыражения.
@@ -495,16 +516,16 @@ function lcs_gen_impl_v(i, j)
         r0 = ij2var(i - 1, j - 1)
         r1 = ij2var(i, j - 1)
         r2 = ij2var(i - 1, j)
-        quote
+        :(
             if (s1[$i] == s2[$j])
-                    $r0 = $(lcs_gen_impl_v(i - 1, j - 1))
-                    1 + $r0
+                $r0 = $(lcs_gen_impl_v(i - 1, j - 1))
+                1 + $r0
             else
-                    $r1 = $(lcs_gen_impl_v(i, j - 1))
-                    $r2 = $(lcs_gen_impl_v(i - 1, j))
-                    max($r1, $r2)
+                $r1 = $(lcs_gen_impl_v(i, j - 1))
+                $r2 = $(lcs_gen_impl_v(i - 1, j))
+                max($r1, $r2)
             end
-        end
+        )
     end
 end
 ```
@@ -518,7 +539,7 @@ lcs_gen_impl_v(2, 3) |> prettify
 <hr>
 
 Видно, что **одни и тех же выражения** в программе **повторяются
-несколько раз**. Это - нехорошо...
+несколько раз**. Нехорошо...
 
 ## Оформляем `lcs_gen_v` как `generated` function
 
@@ -544,6 +565,7 @@ end
 
 # Мемоизация в процессе генерации программы
 
+<!-- 
 ## Выносим присваивания из-под `if`
 
 Подготовка к мемоизации! Теперь будут выполняться лишние вычисления, но
@@ -559,16 +581,16 @@ function lcs_gen_impl_u(i, j)
         r0 = ij2var(i - 1, j - 1)
         r1 = ij2var(i, j - 1)
         r2 = ij2var(i - 1, j)
-        quote
-            $r0 = $(lcs_gen_impl_u(i - 1, j - 1))
-            $r1 = $(lcs_gen_impl_u(i, j - 1))
-            $r2 = $(lcs_gen_impl_u(i - 1, j))
+        :(
             if (s1[$i] == s2[$j])
+                $r0 = $(lcs_gen_impl_u(i - 1, j - 1))
                 1 + $r0
             else
+                $r1 = $(lcs_gen_impl_u(i, j - 1))
+                $r2 = $(lcs_gen_impl_u(i - 1, j))
                 max($r1, $r2)
             end
-        end
+        )
     end
 end
 ```
@@ -580,15 +602,25 @@ lcs_gen_impl_u(2, 3) |> prettify
 ```
 
 <hr>
+ -->
 
-**Недостатки:** (1) Некоторые выражение вычисляется и присваивается
+<!-- **Недостатки:** (1) Некоторые выражение вычисляется и присваивается
 несколько раз, (2) генерируются переменные, которым присваиваются
 константы.
+ -->
+
+<br><br>
+
+**Две проблемы:**
+
+- Некоторые выражения вычисляются и присваиваются **несколько раз**.
+- Генерируются переменные, которым присваиваются **константы**.
+
 
 ## Мемоизация общих подвыражений, подстановка констант
 
-Можно решить эти две проблемы, заведя словарь, в котором будет
-регистрироваться, какие подвыражения уже вычислялись, а какие - нет.
+Решение: заводим словарь, в котором регистрируется, какие подвыражения
+уже вычислялись, а какие - нет. И не являются ли они константами?
 
 В результате получим асимптотику: время - $O(m * n)$, память - $O(m *
 n)$.
@@ -616,17 +648,18 @@ end
 #| output: false
 function lcs_gen_impl_c!(es, d, i, j)
     r = ij2var(i, j)
-
     haskey(d, r) && return d[r]
 
     if (i == 0 || j == 0)
         ass!(es, d, r, 0)
     else
-        r0 = lcs_gen_impl_c!(es, d, i - 1, j - 1)
-        r1 = lcs_gen_impl_c!(es, d, i, j - 1)
-        r2 = lcs_gen_impl_c!(es, d, i - 1, j)
         ass!(es, d, r, :(
-            s1[$i] == s2[$j] ? 1 + $r0 : max($r1, $r2)
+            if s1[$i] == s2[$j]
+                1 + $(lcs_gen_impl_c!(es, d, i - 1, j - 1))
+            else
+                max($(lcs_gen_impl_c!(es, d, i, j - 1)),
+                    $(lcs_gen_impl_c!(es, d, i - 1, j)))
+            end
         ))
     end
 end
@@ -641,7 +674,7 @@ function lcs_gen_impl_c(i, j)
     d = Dict{Symbol,Any}()
     r = lcs_gen_impl_c!(es, d, i, j)
 
-    quote $(es...); $r end
+    :($(es...); $r)
 end
 ```
 
@@ -680,7 +713,7 @@ end
 
 # Упрощение выражений через переписывание (`Metatheory.jl`)
 
-\
+<br><br>
 
 - Устраняем сложения констант: `1 + 0`.
 - Упрощаем выражения: `max(0, y)`.
@@ -746,9 +779,7 @@ function lcs_gen_impl_o(i, j)
     d = Dict{Symbol,Any}()
     r = lcs_gen_impl_o!(es, d, i, j)
 
-    quote
-        $(es...); $r
-    end
+    :($(es...); $r)
 end
 ```
 
@@ -836,7 +867,7 @@ end
 - Ради стадирования приходится переписывать исходную программу. И часто программа, которая была простой и понятной, становится загадочной.
 - Но зато на эту тему изготовлено много статей и диссертаций: :smile:
   @Thiemann1999, @Taha2004, @Kiselyov2004methodology, @Swadi2005
-  @Kiselyov2010, @Aktemur2013, @Kameyama2009, @Kiselyov2018.
+  @Kiselyov2010, @Kameyama2009, @Kiselyov2018.
 
 Но при изготовлении генераторов программ "вручную" можно просто-напросто
 использовать **изменяемые данные** (там, где это удобно).
@@ -886,7 +917,7 @@ end
   авторы этих принципов придумали несколько приёмов, с помощью которых
   можно лицемерно обходить эти принципы.
 -  При изготовлении генераторов программ "вручную", часто бывает выгодно
-   отклоняться от этих приципов.
+   отклоняться от этих принципов.
 
 # Использование комбинаторов для генерации программ
 
@@ -947,7 +978,7 @@ end
 function fix_gen(xs2var, step, xs...)
     es = Expr[]
     e = fix_gen!(es, xs2var, step, xs...)
-    quote $(es...); $e end
+    :($(es...); $e)
 end
 ```
 
@@ -967,7 +998,7 @@ function lcs_gen_step(self, i, j)
 end
 ```
 
-Проверяем. (Результат - следующий слайд. ⬇️)
+Проверяем. (Результат - следующий слайд. :arrow_down:)
 
 ```{julia}
 #| output-location: slide
@@ -989,11 +1020,11 @@ end
 function fix_gen_memo(key, step, xs...)
     es = Expr[]
     e = fix_gen_memo!(Dict(), es, key, step, xs...)
-    quote $(es...); $e end
+    :($(es...); $e)
 end
 ```
 
-Проверяем. (Результат - следующий слайд. ⬇️)
+Проверяем. (Результат - следующий слайд. :arrow_down:)
 
 ```{julia}
 #| output-location: slide
@@ -1013,11 +1044,11 @@ end
 function fix_gen_memo_c(key, step, xs...)
     es = Expr[]
     e = fix_gen_memo_c!(Dict(), es, key, step, xs...)
-    quote $(es...); $e end
+    :($(es...); $e)
 end
 ```
 
-Проверяем. (Результат - следующий слайд. ⬇️)
+Проверяем. (Результат - следующий слайд. :arrow_down:)
 
 ```{julia}
 #| output-location: slide
@@ -1039,11 +1070,11 @@ end
 function fix_gen_memo_o(key, step, xs...)
     es = Expr[]
     e = fix_gen_memo_o!(Dict(), es, key, step, xs...)
-    quote $(es...); $e end
+    :($(es...); $e)
 end
 ```
 
-Проверяем. (Результат - следующий слайд. ⬇️)
+Проверяем. (Результат - следующий слайд. :arrow_down:)
 
 ```{julia}
 #| output-location: slide
