@@ -4,7 +4,7 @@ subtitle: "(Longest Common Subsequence)"
 author: "Сергей Анатольевич Романенко"
 institute: "Институт им. М.В.Келдыша РАН"
 # date: today
-date: 2025-03-01
+date: 2025-03-27
 bibliography: memo_lcs_slides.bib
 # csl: nature-no-superscript.csl
 # csl: acm-sig-proceedings.csl
