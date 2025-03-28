@@ -42,8 +42,7 @@
    [https://doi.org/10.1145/1017753.1017794](https://doi.org/10.1145/1017753.1017794)
 
 5. Kedar Swadi, Walid Taha, and Oleg Kiselyov. 2005. Staging dynamic
-   programming algorithms. _Proc. of the 10th ACM SIGPLAN ICFP_ (2005).
-   Retrieved from
+   programming algorithms. (2005). Retrieved from
    [https://www.academia.edu/download/71507693/2005-04-13.pdf](https://www.academia.edu/download/71507693/2005-04-13.pdf)
 
 6. Walid Taha. 2004. A gentle introduction to multi-stage programming.
