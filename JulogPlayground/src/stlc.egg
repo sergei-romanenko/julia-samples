@@ -1,0 +1,110 @@
+;; Based on
+;;
+;; Boyland, P., Canto Hyatt, S., Dewey, K., Hardekopf, B. (2026).
+;; Breccia: A Functional DSL Compiled to Egglog for Test Input Generation.
+;; In: Sperber, M., Komendantskaya, E. (eds) Functional and Logic Programming.
+;; FLOPS 2026. Lecture Notes in Computer Science, vol 16533.
+;; Springer, Singapore. https://doi.org/10.1007/978-981-92-0184-6_3
+
+
+;; Simply-typed lambda calculus in egglog
+;; Define types in STLC (Figure 2)
+
+(datatype Type
+    (Base)              ;; Base type
+    (Arr Type Type))    ;; Function type: t1 -> t2
+
+;; Define expressions in STLC (Figure 3)
+
+(datatype Exp
+    (Var i64 Type)    ;; Variables: Var(Int, Type)
+    (Abs Exp Exp)     ;; Lambda abstraction: Abs(Var, Exp)
+    (App Exp Exp))    ;; Application: App(Exp, Exp)
+
+;; Predicates for well-formedness and well-typedness
+
+(relation type (Type i64))
+
+ ;; type : Type, with size
+
+(relation welltyped (Exp Type i64)) ;; well-typed : Exp x Type, with
+
+;; Bounds
+
+(relation maxsize (i64))
+(relation maxidx (i64))
+(relation valididx (i64))
+
+(maxsize 4)
+(maxidx 1)
+
+;; Generate valid variable indices
+
+(valididx 1)
+
+(rule (
+    (valididx i) (maxidx m) (> m i)
+)(
+    (valididx (+ i 1)))
+)
+
+;; Base case: Base is a well-formed type
+
+(type (Base) 1)
+
+;; Inductive case: if type(t1) and type(t2), then type(Arr(t1,t2))
+
+(rule (
+    (maxsize m)
+    (type t1 s1)
+    (type t2 s2)
+    (> m (+ s1 s2))
+)(
+    (type (Arr t1 t2) (+ 1 (+ s1 s2))))
+)
+
+;; Base case for var: if i is an integer and type(t),
+;; then welltyped(Var(i,t), t)
+
+(rule (
+    (type t s) (valididx i)
+)(
+    (welltyped (Var i t) t 1))
+)
+
+;; Rule for abs: if welltyped(Var(i,t1),t1) and welltyped(e,t2),
+;; then welltyped(Abs(Var(i,t1),e), Arr(t1,t2))
+
+(rule (
+    (welltyped (Var i t1) t1 s1)
+    (welltyped e t2 s2)
+    (maxsize m)
+    (> m (+ s1 s2))
+)(
+    (welltyped (Abs (Var i t1) e) (Arr t1 t2) (+ 1 (+ s1 s2))))
+)
+
+;; Rule for app: if welltyped(e1,Arr(t1,t2)) and welltyped(e2,t1),
+;; then welltyped(App(e1,e2),t2)
+
+(rule (
+    (welltyped e1 (Arr t1 t2) s1)
+    (welltyped e2 t1 s2)
+    (maxsize m)
+    (> m (+ s1 s2))
+)(
+    (welltyped (App e1 e2) t2 (+ 1 (+ s1 s2))))
+)
+
+;; Equality saturation: two terms of the same type are equivalent
+
+(rule (
+    (welltyped e1 t s1) (welltyped e2 t s2)
+)(
+    (union e1 e2))
+)
+
+(run 10000)
+
+(print-function welltyped 100000)
+(print-size welltyped)

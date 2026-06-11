@@ -1,0 +1,10 @@
+name = "JulogPlayground"
+uuid = "ea599525-7add-4490-a41c-cfafa6111f20"
+version = "0.1.0"
+authors = ["Sergei Romanenko <sergei.romanenko@supercompilers.ru>"]
+
+[deps]
+Julog = "5d8bcb5e-2b2c-4a96-a2b1-d40b3d3c344f"
+
+[compat]
+Julog = "0.1.15"
